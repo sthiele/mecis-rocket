@@ -138,36 +138,26 @@ fn countcis(
 ) -> u32 {
     let conn = Connection::open("mecis.db").unwrap();
 
-    let mut sql0 = format!(
-        "SELECT DISTINCT model as p1, inreac as p2, exreac as p3, mby as p4, mpy as p5, scen as p6, s as p7, r  FROM mis WHERE organism='{}' AND r ='85'",
-        organism
+    let mustin = vec!["85".to_string(), "512".to_string(), "925".to_string()];
+    let forbidden = vec!["1226".to_string(), "1227".to_string()];
+    let mut sql = create_query(&organism,
+        &model,
+        &inreac,
+        &exreac,
+        &mby,
+        &mpy,
+        &scen,
+        &mustin,
+        &forbidden
     );
-    fix_parameters(&mut sql0, &model, &inreac, &exreac, &mby, &mpy, &scen);
-
-    let mut sql1 = format!(
-        "SELECT DISTINCT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7, r  FROM mis WHERE organism='{}' AND r ='512'",
-        organism
-    );
-    fix_parameters(&mut sql1, &model, &inreac, &exreac, &mby, &mpy, &scen);
-
-    let mut sql = format!(
-        "SELECT p1, p2, p3, p4, p5, p6, p7 FROM ({}) inner join ({}) ON p1=q1 AND p2=q2 AND p3=q3 AND p4=q4 AND p5=q5 AND p6=q6 AND p7=q7",sql0,sql1);
-    println!("{}", sql);
-
-    //     let mut sql = format!(
-    //         "SELECT DISTINCT model, inreac, exreac, mby, mpy, scen, s FROM mis WHERE  AND organism='{}'",
-    //         organism
-    //     );
-    //     fix_parameters(&mut sql, &model, &inreac, &exreac, &mby, &mpy, &scen);
 
     sql = format!("SELECT COUNT(*) FROM ({})", sql);
-
     let mut stmt = conn.prepare(&sql).unwrap();
     let mut count = stmt.query_map(&[], |row| row.get::<_, u32>(0)).unwrap();
     let mut res = vec![];
     while let Some(result_row) = count.next() {
         let row = result_row.unwrap();
-        println!("count {}", row);
+//         println!("count {}", row);
         res.push(row);
     }
 
@@ -217,39 +207,18 @@ fn getcis(
 
     let conn = Connection::open("mecis.db").unwrap();
 
-    let mut sql = format!(
-        "SELECT DISTINCT model as p1, inreac as p2, exreac as p3, mby as p4, mpy as p5, scen as p6, s as p7  FROM mis WHERE organism='{}'",
-        organism
+    let mustin = vec!["85".to_string(), "512".to_string(), "925".to_string()];
+    let forbidden = vec!["1226".to_string(), "1227".to_string()];
+    let mut sql = create_query(&organism,
+        &model,
+        &inreac,
+        &exreac,
+        &mby,
+        &mpy,
+        &scen,
+        &mustin,
+        &forbidden
     );
-    fix_parameters(&mut sql, &model, &inreac, &exreac, &mby, &mpy, &scen);
-
-    //     let forbidden = vec!["293", "926"];
-    //
-    //     for r in forbidden {
-    //         println!("r: {}", r);
-    //         sql = format!(
-    //           "SELECT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7 FROM mis WHERE organism='{}' AND r ='{}')",
-    //           sql, organism, r
-    //         );
-    //         fix_parameters(&mut sql, &model, &inreac, &exreac, &mby, &mpy, &scen);
-    //         sql.push_str(")");
-    // //         sql = format!(
-    // //           "SELECT p1, p2, p3, p4, p5, p6, p7 FROM ({}) inner join ({}) ON p1=q1 AND p2=q2 AND p3=q3 AND p4=q4 AND p5=q5 AND p6=q6 AND p7=q7",sql,sql1);
-    //     }
-
-    let mustin = vec!["85", "512"];
-
-    for r in mustin {
-        let mut sql1 = format!(
-          "SELECT DISTINCT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7  FROM mis WHERE organism='{}' AND r ='{}'",
-          organism, r
-      );
-        fix_parameters(&mut sql1, &model, &inreac, &exreac, &mby, &mpy, &scen);
-        sql = format!(
-          "SELECT p1, p2, p3, p4, p5, p6, p7 FROM ({}) inner join ({}) ON p1=q1 AND p2=q2 AND p3=q3 AND p4=q4 AND p5=q5 AND p6=q6 AND p7=q7",sql,sql1);
-    }
-
-    println!("{}", sql);
 
     sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
 
@@ -316,8 +285,47 @@ fn getcis(
     };
     Template::render("view", &view)
 }
+
+fn create_query(organism: &str,
+    model: &str,
+    inreac: &str,
+    exreac: &str,
+    mby: &f64,
+    mpy: &f64,
+    scen: &u32, mustin: &Vec<String>, forbidden: &Vec<String>) -> String {
+
+    let mut sql = "SELECT DISTINCT model as p1, inreac as p2, exreac as p3, mby as p4, mpy as p5, scen as p6, s as p7  FROM mis WHERE 1 ".to_string();
+    fix_parameters(
+        &mut sql,
+        &organism,
+        &model,
+        &inreac,
+        &exreac,
+        &mby,
+        &mpy,
+        &scen,
+    );
+
+    for r in mustin {
+        let mut sql1 = format!(
+          "SELECT DISTINCT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7  FROM mis WHERE r ='{}'",r);
+        sql = format!(
+          "SELECT p1, p2, p3, p4, p5, p6, p7 FROM ({}) inner join ({}) ON p1=q1 AND p2=q2 AND p3=q3 AND p4=q4 AND p5=q5 AND p6=q6 AND p7=q7",sql,sql1);
+    }
+
+    if forbidden.len() > 0 {
+        sql =  format!("SELECT p1, p2, p3, p4, p5, p6, p7  FROM ({}) WHERE 1 ",sql);
+        for r in forbidden {
+            sql = format!(
+            "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
+        }
+    }
+    println!("{}",sql);
+    sql
+}
 fn fix_parameters(
     sql: &mut String,
+    organism: &str,
     model: &str,
     inreac: &str,
     exreac: &str,
@@ -325,6 +333,11 @@ fn fix_parameters(
     mpy: &f64,
     scen: &u32,
 ) {
+    if organism != "None" {
+        sql.push_str(" AND organism='");
+        sql.push_str(organism);
+        sql.push('\'');
+    }
     if model != "None" {
         sql.push_str(" AND model='");
         sql.push_str(model);
@@ -370,24 +383,18 @@ fn getmorecis(
 ) -> Template {
     let conn = Connection::open("mecis.db").unwrap();
 
-    let mustin = vec!["85", "512"];
-
-    let mut sql = format!(
-        "SELECT DISTINCT model as p1, inreac as p2, exreac as p3, mby as p4, mpy as p5, scen as p6, s as p7  FROM mis WHERE organism='{}'",
-        organism
+    let mustin = vec!["85".to_string(), "512".to_string(), "925".to_string()];
+    let forbidden = vec!["1226".to_string(), "1227".to_string()];
+    let mut sql = create_query(&organism,
+        &model,
+        &inreac,
+        &exreac,
+        &mby,
+        &mpy,
+        &scen,
+        &mustin,
+        &forbidden
     );
-    fix_parameters(&mut sql, &model, &inreac, &exreac, &mby, &mpy, &scen);
-
-    for r in mustin {
-        println!("r: {}", r);
-        let mut sql1 = format!(
-          "SELECT DISTINCT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7  FROM mis WHERE organism='{}' AND r ='{}'",
-          organism, r
-      );
-        fix_parameters(&mut sql1, &model, &inreac, &exreac, &mby, &mpy, &scen);
-        sql = format!(
-          "SELECT p1, p2, p3, p4, p5, p6, p7 FROM ({}) inner join ({}) ON p1=q1 AND p2=q2 AND p3=q3 AND p4=q4 AND p5=q5 AND p6=q6 AND p7=q7",sql,sql1);
-    }
 
     sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
 
