@@ -1,4 +1,4 @@
-# The mecis webserver
+# The mecis webservice
 
 - create mecis.db
 - cargo +nightly run
