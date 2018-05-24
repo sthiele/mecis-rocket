@@ -307,18 +307,13 @@ fn create_query(organism: &str,
     );
 
     for r in mustin {
-        let mut sql1 = format!(
-          "SELECT DISTINCT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7  FROM mis WHERE r ='{}'",r);
         sql = format!(
-          "SELECT p1, p2, p3, p4, p5, p6, p7 FROM ({}) inner join ({}) ON p1=q1 AND p2=q2 AND p3=q3 AND p4=q4 AND p5=q5 AND p6=q6 AND p7=q7",sql,sql1);
+        "{} AND EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
     }
 
-    if forbidden.len() > 0 {
-        sql =  format!("SELECT p1, p2, p3, p4, p5, p6, p7  FROM ({}) WHERE 1 ",sql);
-        for r in forbidden {
-            sql = format!(
-            "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
-        }
+    for r in forbidden {
+        sql = format!(
+        "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
     }
     println!("{}",sql);
     sql
