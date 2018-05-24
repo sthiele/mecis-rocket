@@ -4,13 +4,24 @@
 extern crate rocket;
 extern crate rocket_contrib;
 extern crate rusqlite;
-
+extern crate mysql;
+extern crate dotenv;
 #[macro_use]
 extern crate serde_derive;
-use rocket_contrib::Template;
-use rusqlite::Connection;
 
+use rocket_contrib::Template;
 use rocket::response::NamedFile;
+use rusqlite::Connection;
+use dotenv::dotenv;
+use std::env;
+use mysql as my;
+
+
+pub fn establish_connection() -> my::Pool {
+    dotenv().ok();
+    let pool = my::Pool::new(env::var("DATABASE_URL").expect("DATABASE_URL must be set")).unwrap();
+    pool
+}
 
 #[get("/mecis_logo")]
 fn mecis_logo() -> NamedFile {
@@ -30,74 +41,67 @@ struct TemplateContext {
 
 #[get("/")]
 fn mecis() -> Template {
-    let conn = Connection::open("mecis.db").unwrap();
-
+  
+    let conn = establish_connection();
+    
     let mut stmt = conn.prepare("SELECT DISTINCT organism as bla FROM mis")
         .unwrap();
-    let mut organisms = stmt.query_map(&[], |row| row.get::<_, String>(0)).unwrap();
-
     let mut v_orgs = vec![];
-    while let Some(result_row) = organisms.next() {
-        let row = result_row.unwrap();
-        v_orgs.push(row);
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<String>(row.unwrap());
+        v_orgs.push(cell);
     }
 
     let mut stmt = conn.prepare("SELECT DISTINCT model as bla FROM mis")
         .unwrap();
-    let mut models = stmt.query_map(&[], |row| row.get::<_, String>(0)).unwrap();
 
     let mut v_models = vec![];
-    while let Some(result_row) = models.next() {
-        let row = result_row.unwrap();
-        v_models.push(row);
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<String>(row.unwrap());
+        v_models.push(cell);
     }
 
     let mut stmt = conn.prepare("SELECT DISTINCT inreac as bla FROM mis")
         .unwrap();
-    let mut inreacs = stmt.query_map(&[], |row| row.get::<_, String>(0)).unwrap();
 
     let mut v_inreacs = vec![];
-    while let Some(result_row) = inreacs.next() {
-        let row = result_row.unwrap();
-        v_inreacs.push(row);
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<String>(row.unwrap());
+        v_inreacs.push(cell);
     }
 
     let mut stmt = conn.prepare("SELECT DISTINCT exreac as bla FROM mis")
         .unwrap();
-    let mut exreacs = stmt.query_map(&[], |row| row.get::<_, String>(0)).unwrap();
 
     let mut v_exreacs = vec![];
-    while let Some(result_row) = exreacs.next() {
-        let row = result_row.unwrap();
-        v_exreacs.push(row);
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<String>(row.unwrap());
+        v_exreacs.push(cell);
     }
 
     let mut stmt = conn.prepare("SELECT DISTINCT mby as bla FROM mis").unwrap();
-    let mut mbys = stmt.query_map(&[], |row| row.get::<_, f64>(0)).unwrap();
 
     let mut v_mbys = vec![];
-    while let Some(result_row) = mbys.next() {
-        let row = result_row.unwrap();
-        v_mbys.push(row);
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<f64>(row.unwrap());
+        v_mbys.push(cell);
     }
 
     let mut stmt = conn.prepare("SELECT DISTINCT mpy as bla FROM mis").unwrap();
-    let mut mpys = stmt.query_map(&[], |row| row.get::<_, f64>(0)).unwrap();
 
     let mut v_mpys = vec![];
-    while let Some(result_row) = mpys.next() {
-        let row = result_row.unwrap();
-        v_mpys.push(row);
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<f64>(row.unwrap());
+        v_mpys.push(cell);
     }
 
     let mut stmt = conn.prepare("SELECT DISTINCT scen as bla FROM mis")
         .unwrap();
-    let mut scens = stmt.query_map(&[], |row| row.get::<_, u32>(0)).unwrap();
 
     let mut v_scens = vec![];
-    while let Some(result_row) = scens.next() {
-        let row = result_row.unwrap();
-        v_scens.push(row);
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<u32>(row.unwrap());
+        v_scens.push(cell);
     }
 
     let context = TemplateContext {
@@ -136,7 +140,7 @@ fn countcis(
     mpy: f64,
     scen: u32,
 ) -> u32 {
-    let conn = Connection::open("mecis.db").unwrap();
+    let conn = establish_connection();
 
     let mustin = vec!["85".to_string(), "512".to_string(), "925".to_string()];
     let forbidden = vec!["1226".to_string(), "1227".to_string()];
@@ -151,14 +155,17 @@ fn countcis(
         &forbidden
     );
 
-    sql = format!("SELECT COUNT(*) FROM ({})", sql);
-    let mut stmt = conn.prepare(&sql).unwrap();
-    let mut count = stmt.query_map(&[], |row| row.get::<_, u32>(0)).unwrap();
+    sql = format!("SELECT COUNT(*) FROM ({}) AS TX", sql);
+    
+    println!("SQL: {}",sql);
+    
+    let mut stmt = conn.prepare(sql).unwrap();
+//     let mut count = stmt.query_map(&[], |row| row.get::<_, u32>(0)).unwrap();
     let mut res = vec![];
-    while let Some(result_row) = count.next() {
-        let row = result_row.unwrap();
-//         println!("count {}", row);
-        res.push(row);
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<u32>(row.unwrap());
+        println!("count {}", cell);
+        res.push(cell);
     }
 
     res[0]
@@ -205,7 +212,7 @@ fn getcis(
         return Template::render("view", &view);
     }
 
-    let conn = Connection::open("mecis.db").unwrap();
+    let conn = establish_connection();
 
     let mustin = vec!["85".to_string(), "512".to_string(), "925".to_string()];
     let forbidden = vec!["1226".to_string(), "1227".to_string()];
@@ -220,26 +227,27 @@ fn getcis(
         &forbidden
     );
 
-    sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
-
+    sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) AS TX ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
+    
+    println!("SQL: {}",sql);
     let mut stmt = conn.prepare(&sql).unwrap();
-    let mut intervention_sets = stmt.query_map(&[], |row| {
-        let organism = row.get::<_, String>(0);
-        let model = row.get::<_, String>(1);
-        let inreac = row.get::<_, String>(2);
-        let exreac = row.get::<_, String>(3);
-        let mby = row.get::<_, f64>(4);
-        let mpy = row.get::<_, f64>(5);
-        let scen = row.get::<_, u32>(6);
-        Bla {
-            key: format!(
-                "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
-                organism, model, inreac, exreac, mby, mpy, scen
-            ),
-            set_id: row.get::<_, u32>(7),
-            reac_id: row.get::<_, u32>(8),
-        }
-    }).unwrap();
+//     let mut intervention_sets = stmt.query_map(&[], |row| {
+//         let organism = row.get::<_, String>(0);
+//         let model = row.get::<_, String>(1);
+//         let inreac = row.get::<_, String>(2);
+//         let exreac = row.get::<_, String>(3);
+//         let mby = row.get::<_, f64>(4);
+//         let mpy = row.get::<_, f64>(5);
+//         let scen = row.get::<_, u32>(6);
+//         Bla {
+//             key: format!(
+//                 "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
+//                 organism, model, inreac, exreac, mby, mpy, scen
+//             ),
+//             set_id: row.get::<_, u32>(7),
+//             reac_id: row.get::<_, u32>(8),
+//         }
+//     }).unwrap();
 
     let mut res = vec![];
     let mut mis = "".to_string();
@@ -249,10 +257,14 @@ fn getcis(
     let mut counter = 0;
     let mut sql_counter = 0;
     let rowspersite = 100;
-    while let Some(result_row) = intervention_sets.next() {
+    for row in stmt.execute(()).unwrap() {
         sql_counter = sql_counter + 1;
-        let row = result_row.unwrap();
-        if old_key != row.key || old_set_id != row.set_id {
+        let (organism,model,inreac,exreac,mby,mpy,scen,s,r) = my::from_row::<(String,String,String,String,f64,f64,u32,u32,u32)>(row.unwrap());
+        let key = format!(
+                "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
+                organism, model, inreac, exreac, mby, mpy, scen
+            );
+        if old_key != key || old_set_id != s {
             if counter == rowspersite {
                 sql_counter = sql_counter - 1;
                 break;
@@ -260,18 +272,18 @@ fn getcis(
             counter = counter + 1;
             if first {
                 first = false;
-                old_key = row.key.clone();
-                old_set_id = row.set_id;
-                mis.push_str(&format!("{} ", row.reac_id));
+                old_key = key.clone();
+                old_set_id = s;
+                mis.push_str(&format!("{} ", r));
             } else {
                 res.push(old_key.clone() + "<td>" + &mis + "</td>");
-                old_key = row.key.clone();
-                old_set_id = row.set_id;
+                old_key = key.clone();
+                old_set_id = s;
                 mis = "".to_string();
-                mis.push_str(&format!("{} ", row.reac_id));
+                mis.push_str(&format!("{} ", r));
             }
         } else {
-            mis.push_str(&format!("{} ", row.reac_id));
+            mis.push_str(&format!("{} ", r));
         }
     }
     res.push(old_key.clone() + "<td>" + &mis + "</td>");
@@ -306,16 +318,24 @@ fn create_query(organism: &str,
         &scen,
     );
 
+    let mut count = 0;
     for r in mustin {
+        let mut sql1 = format!(
+        "SELECT DISTINCT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7  FROM mis WHERE r ='{}'",r);
+
         sql = format!(
-        "{} AND EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
+          "SELECT p1, p2, p3, p4, p5, p6, p7 FROM ({}) AS T{} inner join ({}) AS T{} ON p1=q1 AND p2=q2 AND p3=q3 AND p4=q4 AND p5=q5 AND p6=q6 AND p7=q7",sql,count,sql1,count+1);
+          count = count+2
     }
 
-    for r in forbidden {
-        sql = format!(
-        "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
+    if forbidden.len() > 0 {
+        sql =  format!("SELECT p1, p2, p3, p4, p5, p6, p7  FROM ({}) AS T{} WHERE 1 ",sql,count);
+        for r in forbidden {
+            sql = format!(
+            "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
+        }
     }
-    println!("{}",sql);
+//     println!("{}",sql);
     sql
 }
 fn fix_parameters(
