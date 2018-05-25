@@ -104,8 +104,8 @@
             </select>
             <br>
             <br>
-            <label>These reactions must be included:</label> <input type="text" id="MUSTIN" size=80 value=""><br>
-            <label>These reactions are not allowed:</label> <input type="text" id="FORBIDDN" size=80 value=""><br>
+            <label>These reactions must be included:</label> <input type="text" id="mustin" size=80 value=""><br>
+            <label>These reactions are not allowed:</label> <input type="text" id="forbidden" size=80 value=""><br>
             <br>
             <br>
           </form>
@@ -118,18 +118,23 @@
   </body>
   <script>
   function showCIS() {
-    var spe = document.getElementById("organism").value;
+
+    var p0 = document.getElementById("organism").value;
     var p1 = document.getElementById("p1").value;
     var p2 = document.getElementById("p2").value;
     var p3 = document.getElementById("p3").value;
     var p4 = document.getElementById("p4").value;
     var p5 = document.getElementById("p5").value;
     var p6 = document.getElementById("p6").value;
-    if (spe=="") {
+    var mustin = document.getElementById("mustin").value;
+    var forbidden = document.getElementById("forbidden").value;
+    
+    if (p0=="") {
       document.getElementById("txtHint").innerHTML="<p>You need to select an organism!</p>";
       return;
     }
-    document.getElementById("txtHint").innerHTML="<p>You selected organism "+spe+"</p>";
+    document.getElementById("txtHint").innerHTML="<br>Processing query ..";
+    document.getElementById("misResults").innerHTML="<br>Please wait!";
     if (window.XMLHttpRequest) {
       // code for IE7+, Firefox, Chrome, Opera, Safari
       xmlhttp=new XMLHttpRequest();
@@ -138,7 +143,7 @@
       xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
       xmlhttp2=new ActiveXObject("Microsoft.XMLHTTP");      
     }
-    xmlhttp.open("GET","countcis/"+spe+"/"+p1+"/"+p2+"/"+p3+"/"+p4+"/"+p5+"/"+p6,true);
+    xmlhttp.open("GET","countcis?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden,true);
 
     xmlhttp.onreadystatechange=function() {
       if (this.readyState==4 && this.status==200) {
@@ -152,7 +157,7 @@
     };
     xmlhttp.send();    
     
-    xmlhttp2.open("GET","getcis/"+spe+"/"+p1+"/"+p2+"/"+p3+"/"+p4+"/"+p5+"/"+p6,true);
+    xmlhttp2.open("GET","getcis?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden,true);
     xmlhttp2.onreadystatechange=function() {
       if (this.readyState==4 && this.status==200) {
         document.getElementById("misResults").innerHTML=this.responseText;
@@ -167,35 +172,44 @@
     xmlhttp2.send();
   }
   function more( sql_offset, mis_offset, max_mis) {
+    document.getElementById("moreb1").disabled = true;
+    
     console.log("sql_offset:",sql_offset);
     console.log("mis_offset:",mis_offset);
     console.log("max_mis:",max_mis);
     if (mis_offset == max_mis ){ return;}
 
-    var spe = document.getElementById("organism").value;
+    var p0 = document.getElementById("organism").value;
     var p1 = document.getElementById("p1").value;
     var p2 = document.getElementById("p2").value;
     var p3 = document.getElementById("p3").value;
     var p4 = document.getElementById("p4").value;
     var p5 = document.getElementById("p5").value;
     var p6 = document.getElementById("p6").value;
+    var mustin = document.getElementById("mustin").value;
+    var forbidden = document.getElementById("forbidden").value;
     if (window.XMLHttpRequest) {
       // code for IE7+, Firefox, Chrome, Opera, Safari
       xmlhttp=new XMLHttpRequest();
     } else { // code for IE6, IE5
       xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
     }
-    xmlhttp.open("GET","getcis/"+spe+"/"+p1+"/"+p2+"/"+p3+"/"+p4+"/"+p5+"/"+p6+"/"+sql_offset+"/"+mis_offset+"/"+max_mis,true);
+    xmlhttp.open("GET","getcism?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden+"&offset="+sql_offset+"&mis_offset="+mis_offset+"&num_sets="+max_mis,true);
     
     xmlhttp.onreadystatechange=function() {
       if (this.readyState==4 && this.status==200) {
       
-        var mydiv = document.getElementById("misResults");
-        var newcontent = document.createElement('div');
-        newcontent.innerHTML = this.responseText;
-        while (newcontent.firstChild) {
-            mydiv.appendChild(newcontent.firstChild);
-        }
+//         var mydiv = document.getElementById("misResults");
+//         var newcontent = document.createElement('div');
+//         while (newcontent.firstChild) {
+//             mydiv.appendChild(newcontent.firstChild);
+//         }
+    var parent = document.getElementById("misResults");
+    var child = document.getElementById("moreb1");
+    parent.removeChild(child);
+
+        newcontent = document.getElementById("misResults").innerHTML + this.responseText;
+        document.getElementById("misResults").innerHTML=newcontent
       }
     };
     xmlhttp.onerror=function() {

@@ -1,4 +1,4 @@
-#![feature(plugin)]
+#![feature(plugin, custom_derive)]
 #![plugin(rocket_codegen)]
 
 extern crate dotenv;
@@ -13,6 +13,8 @@ use mysql as my;
 use rocket::response::NamedFile;
 use rocket_contrib::Template;
 use std::env;
+use std::str::SplitWhitespace;
+
 
 const ROWSPERSITE: u32 = 10;
 
@@ -113,8 +115,9 @@ fn mecis() -> Template {
     };
     Template::render("mecis", &context)
 }
-#[get("/countcis/<organism>/<model>/<inreac>/<exreac>/<mby>/<mpy>/<scen>")]
-fn s_countcis(
+
+#[derive(FromForm, Clone)]
+struct Query {
     organism: String,
     model: String,
     inreac: String,
@@ -122,40 +125,29 @@ fn s_countcis(
     mby: f64,
     mpy: f64,
     scen: u32,
+    mustin: String,
+    forbidden: String
+}
+
+#[get("/countcis?<q>")]
+fn s_countcis(
+    q: Query,
 ) -> String {
     format!(
         "<br>{} intervention sets found!",
-        countcis(&organism, &model, &inreac, &exreac, mby, mpy, scen,)
+        countcis(q)
     )
 }
 
 fn countcis(
-    organism: &str,
-    model: &str,
-    inreac: &str,
-    exreac: &str,
-    mby: f64,
-    mpy: f64,
-    scen: u32,
+    q : Query
 ) -> u32 {
+
     let conn = establish_connection();
 
-    let mustin = vec!["85".to_string(), "512".to_string()];
-    let forbidden = vec!["1226".to_string(), "1227".to_string()];
-    let sql = create_query(
-        &organism,
-        &model,
-        &inreac,
-        &exreac,
-        &mby,
-        &mpy,
-        &scen,
-        &mustin,
-        &forbidden,
-    );
+    let sql = create_query(q);
 
     //     sql = format!("SELECT COUNT(*) FROM ({}) AS TX", sql);
-
     //     println!("SQL: {}",sql);
 
     let mut stmt = conn.prepare(sql).unwrap();
@@ -181,19 +173,12 @@ struct TemplateView {
     mis: Vec<String>,
 }
 
-// #[get("/getcis/<organism>/<model>/<inreac>/<exreac>/<mby>/<mpy>/<scen>/<MUSTIN>")]
-#[get("/getcis/<organism>/<model>/<inreac>/<exreac>/<mby>/<mpy>/<scen>")]
+#[get("/getcis?<q>")]
 fn getcis(
-    organism: String,
-    model: String,
-    inreac: String,
-    exreac: String,
-    mby: f64,
-    mpy: f64,
-    scen: u32,
-    //     mustin: String,
+    q: Query
 ) -> Template {
-    let num_sets = countcis(&organism, &model, &inreac, &exreac, mby, mpy, scen);
+
+    let num_sets = countcis(q.clone());
 
     if num_sets == 0 {
         let view = TemplateView {
@@ -208,23 +193,11 @@ fn getcis(
 
     let conn = establish_connection();
 
-    let mustin = vec!["85".to_string(), "512".to_string()];
-    let forbidden = vec!["1226".to_string(), "1227".to_string()];
-    let mut sql = create_query(
-        &organism,
-        &model,
-        &inreac,
-        &exreac,
-        &mby,
-        &mpy,
-        &scen,
-        &mustin,
-        &forbidden,
-    );
+    let mut sql = create_query(q);
 
     sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) AS TX ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
 
-    println!("SQL: {}", sql);
+//     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
 
     let mut res = vec![];
@@ -234,8 +207,10 @@ fn getcis(
     let mut first = true;
     let mut counter = 0;
     let mut sql_counter = 0;
-
-    for row in stmt.execute(()).unwrap() {
+println!("hi1");
+    let tmp =  stmt.execute(()).unwrap();  
+println!("hi2");
+    for row in tmp {
         sql_counter = sql_counter + 1;
         let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
             my::from_row::<(String, String, String, String, f64, f64, u32, u32, u32)>(row.unwrap());
@@ -243,6 +218,7 @@ fn getcis(
             "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
             organism, model, inreac, exreac, mby, mpy, scen
         );
+        
         if old_key != key || old_set_id != s {
             if counter == ROWSPERSITE {
                 sql_counter = sql_counter - 1;
@@ -251,12 +227,13 @@ fn getcis(
             counter = counter + 1;
             if first {
                 first = false;
-                old_key = key.clone();
+                old_key = key;
                 old_set_id = s;
                 mis.push_str(&format!("{} ", r));
             } else {
-                res.push(old_key.clone() + "<td>" + &mis + "</td>");
-                old_key = key.clone();
+//                 res.push(old_key + "<td>" + &mis + "</td>");
+                res.push(format!("{}<td>{}</td>",old_key, &mis));
+                old_key = key;
                 old_set_id = s;
                 mis = "".to_string();
                 mis.push_str(&format!("{} ", r));
@@ -265,8 +242,10 @@ fn getcis(
             mis.push_str(&format!("{} ", r));
         }
     }
-    res.push(old_key.clone() + "<td>" + &mis + "</td>");
-
+//     res.push(old_key + "<td>" + &mis + "</td>");
+    
+                res.push(format!("{}<td>{}</td>",old_key, &mis));
+println!("hi3");
     let view = TemplateView {
         sql_offset: sql_counter,
         start_mis: 1,
@@ -274,11 +253,13 @@ fn getcis(
         max_mis: num_sets,
         mis: res,
     };
+println!("hi4");
     Template::render("view", &view)
 }
 
-#[get("/getcis/<organism>/<model>/<inreac>/<exreac>/<mby>/<mpy>/<scen>/<offset>/<mis_offset>/<num_sets>")]
-fn getmorecis(
+
+#[derive(FromForm, Clone)]
+struct MoreQuery {
     organism: String,
     model: String,
     inreac: String,
@@ -286,30 +267,36 @@ fn getmorecis(
     mby: f64,
     mpy: f64,
     scen: u32,
+    mustin: String,
+    forbidden: String,
     offset: u32,
     mis_offset: u32,
-    num_sets: u32,
+    num_sets: u32
+}
+
+#[get("/getcism?<q>")]
+fn getmorecis(q: MoreQuery
 ) -> Template {
+
     let conn = establish_connection();
 
-    let mustin = vec!["85".to_string(), "512".to_string()];
-    let forbidden = vec!["1226".to_string(), "1227".to_string()];
-    let mut sql = create_query(
-        &organism,
-        &model,
-        &inreac,
-        &exreac,
-        &mby,
-        &mpy,
-        &scen,
-        &mustin,
-        &forbidden,
-    );
+    let qs = Query {
+        organism: q.organism,
+        model: q.model,
+        inreac: q.inreac,
+        exreac: q.exreac,
+        mby: q.mby,
+        mpy: q.mpy,
+        scen: q.scen,
+        mustin : q.mustin,
+        forbidden : q.forbidden,
+    };
+    let mut sql = create_query(qs );
 
     sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) AS TX ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
 
     let HARDECODEDLIMIT = 20 * ROWSPERSITE;
-    sql.push_str(&format!(" LIMIT {} OFFSET {}", HARDECODEDLIMIT, offset));
+    sql.push_str(&format!(" LIMIT {} OFFSET {}", HARDECODEDLIMIT, q.offset));
 
     let mut stmt = conn.prepare(&sql).unwrap();
 
@@ -352,42 +339,59 @@ fn getmorecis(
         }
     }
     res.push(old_key.clone() + "<td>" + &mis + "</td>");
-
     let view = TemplateView {
-        sql_offset: offset + sql_counter,
-        start_mis: mis_offset + 1,
-        end_mis: mis_offset + counter,
-        max_mis: num_sets,
+        sql_offset: q.offset + sql_counter,
+        start_mis: q.mis_offset + 1,
+        end_mis: q.mis_offset + counter,
+        max_mis: q.num_sets,
         mis: res,
     };
     Template::render("view", &view)
 }
 
 fn create_query(
-    organism: &str,
-    model: &str,
-    inreac: &str,
-    exreac: &str,
-    mby: &f64,
-    mpy: &f64,
-    scen: &u32,
-    mustin: &Vec<String>,
-    forbidden: &Vec<String>,
+    q: Query,
 ) -> String {
     let mut sql = "SELECT DISTINCT model as p1, inreac as p2, exreac as p3, mby as p4, mpy as p5, scen as p6, s as p7  FROM mis WHERE 1 ".to_string();
-    fix_parameters(
-        &mut sql,
-        &organism,
-        &model,
-        &inreac,
-        &exreac,
-        &mby,
-        &mpy,
-        &scen,
-    );
-
+        if q.organism != "None" {
+        sql.push_str(" AND organism='");
+        sql.push_str(&q.organism);
+        sql.push('\'');
+    }
+    if q.model != "None" {
+        sql.push_str(" AND model='");
+        sql.push_str(&q.model);
+        sql.push('\'');
+    }
+    if q.inreac != "None" {
+        sql.push_str(" AND inreac='");
+        sql.push_str(&q.inreac);
+        sql.push('\'');
+    }
+    if q.exreac != "None" {
+        sql.push_str(" AND exreac='");
+        sql.push_str(&q.exreac);
+        sql.push('\'');
+    }
+    if !q.mby.is_nan() {
+        sql.push_str(" AND mby='");
+        sql.push_str(&format!("{}", q.mby));
+        sql.push('\'');
+    }
+    if !q.mpy.is_nan() {
+        sql.push_str(" AND mpy='");
+        sql.push_str(&format!("{}", q.mpy));
+        sql.push('\'');
+    }
+    sql.push_str(" AND scen='");
+    sql.push_str(&format!("{}", q.scen));
+    sql.push('\'');
+    
+    let mut mustin= q.mustin.split_whitespace();
+    let mut forbidden = q.forbidden.split_whitespace();
+        
     let mut count = 0;
-    for r in mustin {
+    while let Some(r) = mustin.next() {
         let mut sql1 = format!(
         "SELECT DISTINCT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7  FROM mis WHERE r ='{}'",r);
 
@@ -396,62 +400,21 @@ fn create_query(
         count = count + 2
     }
 
-    if forbidden.len() > 0 {
+    if let Some(r) = forbidden.nth(0)  {
         sql = format!(
             "SELECT p1, p2, p3, p4, p5, p6, p7  FROM ({}) AS T{} WHERE 1 ",
             sql, count
         );
-        for r in forbidden {
+        sql = format!(
+            "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
+            
+        while let Some(r) = forbidden.next() {
             sql = format!(
             "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
         }
     }
     //     println!("{}",sql);
     sql
-}
-fn fix_parameters(
-    sql: &mut String,
-    organism: &str,
-    model: &str,
-    inreac: &str,
-    exreac: &str,
-    mby: &f64,
-    mpy: &f64,
-    scen: &u32,
-) {
-    if organism != "None" {
-        sql.push_str(" AND organism='");
-        sql.push_str(organism);
-        sql.push('\'');
-    }
-    if model != "None" {
-        sql.push_str(" AND model='");
-        sql.push_str(model);
-        sql.push('\'');
-    }
-    if inreac != "None" {
-        sql.push_str(" AND inreac='");
-        sql.push_str(inreac);
-        sql.push('\'');
-    }
-    if exreac != "None" {
-        sql.push_str(" AND exreac='");
-        sql.push_str(exreac);
-        sql.push('\'');
-    }
-    if !mby.is_nan() {
-        sql.push_str(" AND mby='");
-        sql.push_str(&format!("{}", mby));
-        sql.push('\'');
-    }
-    if !mpy.is_nan() {
-        sql.push_str(" AND mpy='");
-        sql.push_str(&format!("{}", mpy));
-        sql.push('\'');
-    }
-    sql.push_str(" AND scen='");
-    sql.push_str(&format!("{}", scen));
-    sql.push('\'');
 }
 
 fn rocket() -> rocket::Rocket {
