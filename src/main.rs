@@ -196,6 +196,9 @@ fn getcis(
     let mut sql = create_query(q);
 
     sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) AS TX ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
+    
+    let HARDECODEDLIMIT = 20 * ROWSPERSITE;
+    sql.push_str(&format!(" LIMIT {}", HARDECODEDLIMIT));
 
 //     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
