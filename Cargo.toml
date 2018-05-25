@@ -16,10 +16,6 @@ version = "0.3.10"
 default-features = false
 features = ["handlebars_templates"]
 
-[dependencies.rusqlite]
-version = "0.11.0"
-features = ["bundled"]
-
 [dependencies.mysql]
 version = "*"
 features = ["ssl"]

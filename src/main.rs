@@ -5,7 +5,6 @@ extern crate dotenv;
 extern crate mysql;
 extern crate rocket;
 extern crate rocket_contrib;
-extern crate rusqlite;
 #[macro_use]
 extern crate serde_derive;
 
@@ -13,7 +12,6 @@ use dotenv::dotenv;
 use mysql as my;
 use rocket::response::NamedFile;
 use rocket_contrib::Template;
-use rusqlite::Connection;
 use std::env;
 
 const ROWSPERSITE: u32 = 10;
@@ -144,7 +142,7 @@ fn countcis(
 
     let mustin = vec!["85".to_string(), "512".to_string()];
     let forbidden = vec!["1226".to_string(), "1227".to_string()];
-    let mut sql = create_query(
+    let sql = create_query(
         &organism,
         &model,
         &inreac,
@@ -181,13 +179,6 @@ struct TemplateView {
     end_mis: u32,
     max_mis: u32,
     mis: Vec<String>,
-}
-
-#[derive(Debug)]
-struct Bla {
-    key: String,
-    set_id: u32,
-    reac_id: u32,
 }
 
 // #[get("/getcis/<organism>/<model>/<inreac>/<exreac>/<mby>/<mpy>/<scen>/<MUSTIN>")]
