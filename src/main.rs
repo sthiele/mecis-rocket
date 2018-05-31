@@ -13,10 +13,8 @@ use mysql as my;
 use rocket::response::NamedFile;
 use rocket_contrib::Template;
 use std::env;
-use std::str::SplitWhitespace;
 
-
-const ROWSPERSITE: u32 = 10;
+const ROWSPERSITE: u32 = 50;
 
 pub fn establish_connection() -> my::Pool {
     dotenv().ok();
@@ -126,42 +124,31 @@ struct Query {
     mpy: f64,
     scen: u32,
     mustin: String,
-    forbidden: String
+    forbidden: String,
 }
 
 #[get("/countcis?<q>")]
-fn s_countcis(
-    q: Query,
-) -> String {
-    format!(
-        "<br>{} intervention sets found!",
-        countcis(q)
-    )
+fn s_countcis(q: Query) -> String {
+    format!("<br>{} intervention sets found!", countcis(q))
 }
 
-fn countcis(
-    q : Query
-) -> u32 {
-
+fn countcis(q: Query) -> u32 {
     let conn = establish_connection();
 
-    let sql = create_query(q);
+    let mut sql = create_query(q);
 
-    //     sql = format!("SELECT COUNT(*) FROM ({}) AS TX", sql);
-    //     println!("SQL: {}",sql);
+    sql = format!("SELECT COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen,s FROM ({}) AS TX) AS TY", sql);
+    println!("SQL: {}", sql);
 
     let mut stmt = conn.prepare(sql).unwrap();
-    //     let mut res = vec![];
-    let mut count = 0;
+    let mut res = vec![];
     for row in stmt.execute(()).unwrap() {
-        //         let cell = my::from_row::<u32>(row.unwrap());
-        //         println!("count {}", cell);
-        //         res.push(cell);
-        count = count + 1;
+        let cell = my::from_row::<u32>(row.unwrap());
+        println!("count {}", cell);
+        res.push(cell);
     }
 
-    //     res[0]
-    count
+    res[0]
 }
 
 #[derive(Serialize)]
@@ -174,10 +161,7 @@ struct TemplateView {
 }
 
 #[get("/getcis?<q>")]
-fn getcis(
-    q: Query
-) -> Template {
-
+fn getcis(q: Query) -> Template {
     let num_sets = countcis(q.clone());
 
     if num_sets == 0 {
@@ -195,12 +179,15 @@ fn getcis(
 
     let mut sql = create_query(q);
 
-    sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) AS TX ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
-    
+    sql = format!(
+        "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
+        sql
+    );
+
     let HARDECODEDLIMIT = 20 * ROWSPERSITE;
     sql.push_str(&format!(" LIMIT {}", HARDECODEDLIMIT));
 
-//     println!("SQL: {}", sql);
+    println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
 
     let mut res = vec![];
@@ -210,9 +197,7 @@ fn getcis(
     let mut first = true;
     let mut counter = 0;
     let mut sql_counter = 0;
-println!("hi1");
-    let tmp =  stmt.execute(()).unwrap();  
-println!("hi2");
+    let tmp = stmt.execute(()).unwrap();
     for row in tmp {
         sql_counter = sql_counter + 1;
         let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
@@ -221,7 +206,7 @@ println!("hi2");
             "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
             organism, model, inreac, exreac, mby, mpy, scen
         );
-        
+
         if old_key != key || old_set_id != s {
             if counter == ROWSPERSITE {
                 sql_counter = sql_counter - 1;
@@ -234,8 +219,8 @@ println!("hi2");
                 old_set_id = s;
                 mis.push_str(&format!("{} ", r));
             } else {
-//                 res.push(old_key + "<td>" + &mis + "</td>");
-                res.push(format!("{}<td>{}</td>",old_key, &mis));
+                //                 res.push(old_key + "<td>" + &mis + "</td>");
+                res.push(format!("{}<td>{}</td>", old_key, &mis));
                 old_key = key;
                 old_set_id = s;
                 mis = "".to_string();
@@ -245,10 +230,9 @@ println!("hi2");
             mis.push_str(&format!("{} ", r));
         }
     }
-//     res.push(old_key + "<td>" + &mis + "</td>");
-    
-                res.push(format!("{}<td>{}</td>",old_key, &mis));
-println!("hi3");
+    //     res.push(old_key + "<td>" + &mis + "</td>");
+
+    res.push(format!("{}<td>{}</td>", old_key, &mis));
     let view = TemplateView {
         sql_offset: sql_counter,
         start_mis: 1,
@@ -256,10 +240,8 @@ println!("hi3");
         max_mis: num_sets,
         mis: res,
     };
-println!("hi4");
     Template::render("view", &view)
 }
-
 
 #[derive(FromForm, Clone)]
 struct MoreQuery {
@@ -274,13 +256,11 @@ struct MoreQuery {
     forbidden: String,
     offset: u32,
     mis_offset: u32,
-    num_sets: u32
+    num_sets: u32,
 }
 
 #[get("/getcism?<q>")]
-fn getmorecis(q: MoreQuery
-) -> Template {
-
+fn getmorecis(q: MoreQuery) -> Template {
     let conn = establish_connection();
 
     let qs = Query {
@@ -291,12 +271,15 @@ fn getmorecis(q: MoreQuery
         mby: q.mby,
         mpy: q.mpy,
         scen: q.scen,
-        mustin : q.mustin,
-        forbidden : q.forbidden,
+        mustin: q.mustin,
+        forbidden: q.forbidden,
     };
-    let mut sql = create_query(qs );
+    let mut sql = create_query(qs);
 
-    sql = format!("SELECT organism, p1, p2, p3, p4, p5, p6, p7, r FROM mis inner join ({}) AS TX ON p1=model AND p2=inreac AND p3=exreac AND p4=mby AND p5=mpy AND p6=scen AND p7=s", sql);
+    sql = format!(
+        "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
+        sql
+    );
 
     let HARDECODEDLIMIT = 20 * ROWSPERSITE;
     sql.push_str(&format!(" LIMIT {} OFFSET {}", HARDECODEDLIMIT, q.offset));
@@ -352,11 +335,9 @@ fn getmorecis(q: MoreQuery
     Template::render("view", &view)
 }
 
-fn create_query(
-    q: Query,
-) -> String {
-    let mut sql = "SELECT DISTINCT model as p1, inreac as p2, exreac as p3, mby as p4, mpy as p5, scen as p6, s as p7  FROM mis WHERE 1 ".to_string();
-        if q.organism != "None" {
+fn create_query(q: Query) -> String {
+    let mut sql = "SELECT * FROM mis WHERE 1".to_string();
+    if q.organism != "None" {
         sql.push_str(" AND organism='");
         sql.push_str(&q.organism);
         sql.push('\'');
@@ -389,35 +370,26 @@ fn create_query(
     sql.push_str(" AND scen='");
     sql.push_str(&format!("{}", q.scen));
     sql.push('\'');
-    
-    let mut mustin= q.mustin.split_whitespace();
+
+    let mut outer_sql = format!("SELECT * FROM ({}) AS T0 WHERE 1", sql);
+
+    let mut mustin = q.mustin.split_whitespace();
     let mut forbidden = q.forbidden.split_whitespace();
-        
-    let mut count = 0;
+    let mut counter = 1;
+
     while let Some(r) = mustin.next() {
-        let mut sql1 = format!(
-        "SELECT DISTINCT model as q1, inreac as q2, exreac as q3, mby as q4, mpy as q5, scen as q6, s as q7  FROM mis WHERE r ='{}'",r);
-
-        sql = format!(
-          "SELECT p1, p2, p3, p4, p5, p6, p7 FROM ({}) AS T{} inner join ({}) AS T{} ON p1=q1 AND p2=q2 AND p3=q3 AND p4=q4 AND p5=q5 AND p6=q6 AND p7=q7",sql,count,sql1,count+1);
-        count = count + 2
+        outer_sql = format!(
+            "{} AND EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, r);
+        counter = counter + 1;
     }
 
-    if let Some(r) = forbidden.nth(0)  {
-        sql = format!(
-            "SELECT p1, p2, p3, p4, p5, p6, p7  FROM ({}) AS T{} WHERE 1 ",
-            sql, count
-        );
-        sql = format!(
-            "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
-            
-        while let Some(r) = forbidden.next() {
-            sql = format!(
-            "{} AND NOT EXISTS (SELECT r FROM mis WHERE r ='{}' AND model=p1 AND inreac=p2 AND exreac=p3 AND mby=p4 AND mpy=p5 AND scen=p6 AND s=p7)", sql, r);
-        }
+    while let Some(r) = forbidden.next() {
+        outer_sql = format!(
+            "{} AND NOT EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, r);
+        counter = counter + 1;
     }
-    //     println!("{}",sql);
-    sql
+
+    outer_sql
 }
 
 fn rocket() -> rocket::Rocket {
