@@ -174,10 +174,16 @@
   function more( sql_offset, mis_offset, max_mis) {
     document.getElementById("moreb1").disabled = true;
     
-    console.log("sql_offset:",sql_offset);
-    console.log("mis_offset:",mis_offset);
-    console.log("max_mis:",max_mis);
-    if (mis_offset == max_mis ){ return;}
+//     console.log("sql_offset:",sql_offset);
+//     console.log("mis_offset:",mis_offset);
+//     console.log("max_mis:",max_mis);
+    if (mis_offset == max_mis ){ 
+        
+        var parent = document.getElementById("misResults");
+        var child = document.getElementById("moreb1");
+        parent.removeChild(child);
+        return;
+    }
 
     var p0 = document.getElementById("organism").value;
     var p1 = document.getElementById("p1").value;
@@ -199,17 +205,18 @@
     xmlhttp.onreadystatechange=function() {
       if (this.readyState==4 && this.status==200) {
       
-//         var mydiv = document.getElementById("misResults");
-//         var newcontent = document.createElement('div');
-//         while (newcontent.firstChild) {
-//             mydiv.appendChild(newcontent.firstChild);
-//         }
-    var parent = document.getElementById("misResults");
-    var child = document.getElementById("moreb1");
-    parent.removeChild(child);
+        var parent = document.getElementById("misResults");
+        var child = document.getElementById("moreb1");
+        parent.removeChild(child);
 
         newcontent = document.getElementById("misResults").innerHTML + this.responseText;
         document.getElementById("misResults").innerHTML=newcontent
+        if (mis_offset == max_mis ){       
+            var parent = document.getElementById("misResults");
+            var child = document.getElementById("moreb1");
+            parent.removeChild(child);
+     
+        }
       }
     };
     xmlhttp.onerror=function() {
