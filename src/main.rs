@@ -12,6 +12,7 @@ use dotenv::dotenv;
 use mysql as my;
 use rocket::response::NamedFile;
 use rocket_contrib::Template;
+use std::cmp::Ordering;
 use std::env;
 
 const ROWSPERSITE: u32 = 50;
@@ -44,63 +45,52 @@ fn mecis() -> Template {
 
     let mut stmt = conn.prepare("SELECT DISTINCT organism as bla FROM mis")
         .unwrap();
-    let mut v_orgs = vec![];
-    for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<String>(row.unwrap());
-        v_orgs.push(cell);
-    }
+    let v_orgs = stmt.execute(())
+        .unwrap()
+        .map(|row| my::from_row::<String>(row.unwrap()))
+        .collect();
 
     let mut stmt = conn.prepare("SELECT DISTINCT model as bla FROM mis")
         .unwrap();
-
-    let mut v_models = vec![];
-    for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<String>(row.unwrap());
-        v_models.push(cell);
-    }
+    let v_models = stmt.execute(())
+        .unwrap()
+        .map(|row| my::from_row::<String>(row.unwrap()))
+        .collect();
 
     let mut stmt = conn.prepare("SELECT DISTINCT inreac as bla FROM mis")
         .unwrap();
-
-    let mut v_inreacs = vec![];
-    for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<String>(row.unwrap());
-        v_inreacs.push(cell);
-    }
+    let v_inreacs = stmt.execute(())
+        .unwrap()
+        .map(|row| my::from_row::<String>(row.unwrap()))
+        .collect();
 
     let mut stmt = conn.prepare("SELECT DISTINCT exreac as bla FROM mis")
         .unwrap();
-
-    let mut v_exreacs = vec![];
-    for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<String>(row.unwrap());
-        v_exreacs.push(cell);
-    }
+    let v_exreacs = stmt.execute(())
+        .unwrap()
+        .map(|row| my::from_row::<String>(row.unwrap()))
+        .collect();
 
     let mut stmt = conn.prepare("SELECT DISTINCT mby as bla FROM mis").unwrap();
-
-    let mut v_mbys = vec![];
-    for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<f64>(row.unwrap());
-        v_mbys.push(cell);
-    }
+    let mut v_mbys: Vec<f64> = stmt.execute(())
+        .unwrap()
+        .map(|row| my::from_row::<f64>(row.unwrap()))
+        .collect();
+    v_mbys.sort_by(|a, b| mcmp(a, b));
 
     let mut stmt = conn.prepare("SELECT DISTINCT mpy as bla FROM mis").unwrap();
-
-    let mut v_mpys = vec![];
-    for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<f64>(row.unwrap());
-        v_mpys.push(cell);
-    }
+    let mut v_mpys: Vec<f64> = stmt.execute(())
+        .unwrap()
+        .map(|row| my::from_row::<f64>(row.unwrap()))
+        .collect();
+    v_mpys.sort_by(|a, b| mcmp(a, b));
 
     let mut stmt = conn.prepare("SELECT DISTINCT scen as bla FROM mis")
         .unwrap();
-
-    let mut v_scens = vec![];
-    for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<u32>(row.unwrap());
-        v_scens.push(cell);
-    }
+    let v_scens = stmt.execute(())
+        .unwrap()
+        .map(|row| my::from_row::<u32>(row.unwrap()))
+        .collect();
 
     let context = TemplateContext {
         organism: v_orgs,
@@ -112,6 +102,43 @@ fn mecis() -> Template {
         scen: v_scens,
     };
     Template::render("mecis", &context)
+}
+
+fn id2name(conn: &my::Pool, id: u32) -> String {
+    let sql = format!("SELECT name FROM reactions WHERE mecisid={}", id);
+    println!("SQL: {}", sql);
+
+    let mut stmt = conn.prepare(sql).unwrap();
+    let mut res = vec![];
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<String>(row.unwrap());
+        res.push(cell);
+    }
+    res[0].clone()
+}
+
+fn name2id(conn: &my::Pool, name: &str) -> u32 {
+    let sql = format!("SELECT mecisid FROM reactions WHERE name='{}'", name);
+    println!("SQL: {}", sql);
+
+    let mut stmt = conn.prepare(sql).unwrap();
+    let mut res = vec![];
+    for row in stmt.execute(()).unwrap() {
+        let cell = my::from_row::<u32>(row.unwrap());
+        res.push(cell);
+    }
+    res[0]
+}
+
+// compare f64 panic on NaN
+fn mcmp(one: &f64, other: &f64) -> Ordering {
+    if one.is_nan() {
+        panic!("Unexpected NaN");
+    }
+    if other.is_nan() {
+        panic!("Unexpected NaN");
+    }
+    one.partial_cmp(other).unwrap()
 }
 
 #[derive(FromForm, Clone)]
@@ -129,13 +156,12 @@ struct Query {
 
 #[get("/countcis?<q>")]
 fn s_countcis(q: Query) -> String {
-    format!("<br>{} intervention sets found!", countcis(q))
+    let conn = establish_connection();
+    format!("<br>{} intervention sets found!", countcis(&conn, q))
 }
 
-fn countcis(q: Query) -> u32 {
-    let conn = establish_connection();
-
-    let mut sql = create_query(q);
+fn countcis(conn: &my::Pool, q: Query) -> u32 {
+    let mut sql = create_query(&conn, q);
 
     sql = format!("SELECT COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen,s FROM ({}) AS TX) AS TY", sql);
     println!("SQL: {}", sql);
@@ -162,7 +188,8 @@ struct TemplateView {
 
 #[get("/getcis?<q>")]
 fn getcis(q: Query) -> Template {
-    let num_sets = countcis(q.clone());
+    let conn = establish_connection();
+    let num_sets = countcis(&conn, q.clone());
 
     if num_sets == 0 {
         let view = TemplateView {
@@ -175,9 +202,7 @@ fn getcis(q: Query) -> Template {
         return Template::render("view", &view);
     }
 
-    let conn = establish_connection();
-
-    let mut sql = create_query(q);
+    let mut sql = create_query(&conn, q);
 
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
@@ -217,17 +242,20 @@ fn getcis(q: Query) -> Template {
                 first = false;
                 old_key = key;
                 old_set_id = s;
-                mis.push_str(&format!("{} ", r));
+                let name = id2name(&conn, r);
+                mis.push_str(&format!("{} ", name));
             } else {
                 //                 res.push(old_key + "<td>" + &mis + "</td>");
                 res.push(format!("{}<td>{}</td>", old_key, &mis));
                 old_key = key;
                 old_set_id = s;
                 mis = "".to_string();
-                mis.push_str(&format!("{} ", r));
+                let name = id2name(&conn, r);
+                mis.push_str(&format!("{} ", name));
             }
         } else {
-            mis.push_str(&format!("{} ", r));
+            let name = id2name(&conn, r);
+            mis.push_str(&format!("{} ", name));
         }
     }
     //     res.push(old_key + "<td>" + &mis + "</td>");
@@ -274,7 +302,7 @@ fn getmorecis(q: MoreQuery) -> Template {
         mustin: q.mustin,
         forbidden: q.forbidden,
     };
-    let mut sql = create_query(qs);
+    let mut sql = create_query(&conn, qs);
 
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
@@ -335,7 +363,7 @@ fn getmorecis(q: MoreQuery) -> Template {
     Template::render("view", &view)
 }
 
-fn create_query(q: Query) -> String {
+fn create_query(conn: &my::Pool, q: Query) -> String {
     let mut sql = "SELECT * FROM mis WHERE 1".to_string();
     if q.organism != "None" {
         sql.push_str(" AND organism='");
@@ -378,14 +406,17 @@ fn create_query(q: Query) -> String {
     let mut counter = 1;
 
     while let Some(r) = mustin.next() {
+        let mecisid = name2id(conn, r);
+        println!("name:{} id:{}", r, mecisid);
         outer_sql = format!(
-            "{} AND EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, r);
+            "{} AND EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
         counter = counter + 1;
     }
 
     while let Some(r) = forbidden.next() {
+        let mecisid = name2id(conn, r);
         outer_sql = format!(
-            "{} AND NOT EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, r);
+            "{} AND NOT EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
         counter = counter + 1;
     }
 
