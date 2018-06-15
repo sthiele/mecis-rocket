@@ -156,7 +156,7 @@ struct Query {
 #[get("/countcis?<q>")]
 fn s_countcis(q: Query) -> String {
     let conn = establish_connection();
-    format!("<br>{} intervention sets found!", countcis(&conn, q))
+    format!("{}", countcis(&conn, q))
 }
 
 fn countcis(conn: &my::Pool, q: Query) -> u32 {

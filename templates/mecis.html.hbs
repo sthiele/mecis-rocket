@@ -15,8 +15,8 @@
         padding: 0px; 
       }
       header {
-        background: #91bd44;
-        color:black;
+        background: #31011b;
+        color: #ff55ff;
         padding-left: 10px; 
       }
       .nav {
@@ -42,7 +42,7 @@
     
     ​<div class="flex-column">
       <header>
-        <h1><img src="mecis_logo" alt="Mecis Logo"> MECIS web service</h1>
+        <h1><img src="mecis_logo" alt="Mecis Logo"> KISS ME - web service</h1>
       </header>
       ​<div class="flex-row">
         <nav class="nav">
@@ -188,13 +188,16 @@
 
         xmlhttp.onreadystatechange=function() {
             if (this.readyState==4 && this.status==200) {
-                document.getElementById("txtHint").innerHTML=this.responseText;
+                document.getElementById("txtHint").innerHTML="<br>"+this.responseText+" intervention sets found!";
                 var parent = document.getElementById("dlbutton");
-                var button = document.createElement("INPUT");
-                button.setAttribute("type","button");
-                button.setAttribute("value","Download first 1000 as CSV");
-                button.setAttribute("onclick", "savecis()");
-                parent.appendChild(button);
+                parent.innerHTML="";
+                if(this.responseText!="0") {
+                    var button = document.createElement("INPUT");
+                    button.setAttribute("type","button");
+                    button.setAttribute("value","Download as CSV (max 1000)");
+                    button.setAttribute("onclick", "savecis()");
+                    parent.appendChild(button);
+                }
                 
             }
         };
