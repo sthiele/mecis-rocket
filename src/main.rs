@@ -11,11 +11,14 @@ extern crate serde_derive;
 use dotenv::dotenv;
 use mysql as my;
 use rocket::response::NamedFile;
+use rocket::response::Stream;
 use rocket_contrib::Template;
 use std::cmp::Ordering;
 use std::env;
+use std::io::Cursor;
 
 const ROWSPERSITE: u32 = 50;
+const ROWSPERFILE: u32 = 1000;
 
 pub fn establish_connection() -> my::Pool {
     dotenv().ok();
@@ -106,8 +109,6 @@ fn mecis() -> Template {
 
 fn id2name(conn: &my::Pool, id: u32) -> String {
     let sql = format!("SELECT name FROM reactions WHERE mecisid={}", id);
-    println!("SQL: {}", sql);
-
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = vec![];
     for row in stmt.execute(()).unwrap() {
@@ -119,8 +120,6 @@ fn id2name(conn: &my::Pool, id: u32) -> String {
 
 fn name2id(conn: &my::Pool, name: &str) -> u32 {
     let sql = format!("SELECT mecisid FROM reactions WHERE name='{}'", name);
-    println!("SQL: {}", sql);
-
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = vec![];
     for row in stmt.execute(()).unwrap() {
@@ -271,6 +270,72 @@ fn getcis(q: Query) -> Template {
     Template::render("view", &view)
 }
 
+#[get("/getcsv?<q>")]
+fn getcsv(q: Query) -> Stream<Cursor<String>> {
+    let conn = establish_connection();
+    let num_sets = countcis(&conn, q.clone());
+
+    let mut stream = "".to_string();
+
+    if num_sets == 0 {
+        return Stream::from(Cursor::new(stream));
+    }
+
+    let mut sql = create_query(&conn, q);
+
+    sql = format!(
+        "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
+        sql
+    );
+
+    let HARDECODEDLIMIT = 20 * ROWSPERFILE;
+    sql.push_str(&format!(" LIMIT {}", HARDECODEDLIMIT));
+
+    println!("SQL: {}", sql);
+    let mut stmt = conn.prepare(&sql).unwrap();
+
+    let mut mis = "".to_string();
+    let mut old_key = "".to_string();
+    let mut old_set_id = 0;
+    let mut first = true;
+    let mut counter = 0;
+    let tmp = stmt.execute(()).unwrap();
+    for row in tmp {
+        let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
+            my::from_row::<(String, String, String, String, f64, f64, u32, u32, u32)>(row.unwrap());
+        let key = format!(
+            "{},{},{},{},{},{},{}",
+            organism, model, inreac, exreac, mby, mpy, scen
+        );
+
+        if old_key != key || old_set_id != s {
+            if counter == ROWSPERFILE {
+                break;
+            }
+            counter = counter + 1;
+            if first {
+                first = false;
+                old_key = key;
+                old_set_id = s;
+                let name = id2name(&conn, r);
+                mis.push_str(&format!("{} ", name));
+            } else {
+                stream.push_str(&format!("{},{}\n", old_key, &mis));
+                old_key = key;
+                old_set_id = s;
+                mis = "".to_string();
+                let name = id2name(&conn, r);
+                mis.push_str(&format!("{} ", name));
+            }
+        } else {
+            let name = id2name(&conn, r);
+            mis.push_str(&format!("{} ", name));
+        }
+    }
+    stream.push_str(&format!("{},{}\n", old_key, &mis));
+    Stream::from(Cursor::new(stream))
+}
+
 #[derive(FromForm, Clone)]
 struct MoreQuery {
     organism: String,
@@ -340,16 +405,19 @@ fn getmorecis(q: MoreQuery) -> Template {
                 first = false;
                 old_key = key.clone();
                 old_set_id = s;
-                mis.push_str(&format!("{} ", r));
+                let name = id2name(&conn, r);
+                mis.push_str(&format!("{} ", name));
             } else {
                 res.push(old_key.clone() + "<td>" + &mis + "</td>");
                 old_key = key.clone();
                 old_set_id = s;
                 mis = "".to_string();
-                mis.push_str(&format!("{} ", r));
+                let name = id2name(&conn, r);
+                mis.push_str(&format!("{} ", name));
             }
         } else {
-            mis.push_str(&format!("{} ", r));
+            let name = id2name(&conn, r);
+            mis.push_str(&format!("{} ", name));
         }
     }
     res.push(old_key.clone() + "<td>" + &mis + "</td>");
@@ -407,7 +475,6 @@ fn create_query(conn: &my::Pool, q: Query) -> String {
 
     while let Some(r) = mustin.next() {
         let mecisid = name2id(conn, r);
-        println!("name:{} id:{}", r, mecisid);
         outer_sql = format!(
             "{} AND EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
         counter = counter + 1;
@@ -428,6 +495,7 @@ fn rocket() -> rocket::Rocket {
         .mount("/", routes![mecis])
         .mount("/", routes![s_countcis])
         .mount("/", routes![getcis])
+        .mount("/", routes![getcsv])
         .mount("/", routes![getmorecis])
         .mount("/", routes![mecis_logo])
         .attach(Template::fairing())
@@ -437,3 +505,4 @@ fn rocket() -> rocket::Rocket {
 fn main() {
     rocket().launch();
 }
+
