@@ -13,6 +13,7 @@ use mysql as my;
 use rocket::response::NamedFile;
 use rocket::response::Stream;
 use rocket_contrib::Template;
+use rocket_contrib::Json;
 use std::cmp::Ordering;
 use std::env;
 use std::io::Cursor;
@@ -156,49 +157,54 @@ struct Query {
 #[get("/countcis?<q>")]
 fn s_countcis(q: Query) -> String {
     let conn = establish_connection();
-    format!("{}", countcis(&conn, q))
+    format!("{:?}", countcis(&conn, q))
 }
 
-fn countcis(conn: &my::Pool, q: Query) -> u32 {
+fn countcis(conn: &my::Pool, q: Query) -> (u32,u32) {
     let mut sql = create_query(&conn, q);
 
-    sql = format!("SELECT COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen,s FROM ({}) AS TX) AS TY", sql);
+//     sql = format!("SELECT COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen,s FROM ({}) AS TX) AS TY", sql);
+    sql = format!("SELECT  COUNT(*), SUM(len) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen,len, s FROM ({}) AS TX) AS TY", sql);
+
     println!("SQL: {}", sql);
 
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = vec![];
     for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<u32>(row.unwrap());
-        println!("count {}", cell);
+        let cell = my::from_row::<(u32,u32)>(row.unwrap());
+        println!("count {:?}", cell);
         res.push(cell);
     }
 
     res[0]
 }
 
-#[derive(Serialize)]
+#[derive(Serialize,Debug)]
 struct TemplateView {
-    sql_offset: u32,
-    start_mis: u32,
+    col_offset: u32,
+    mis_offset: u32,
     end_mis: u32,
     max_mis: u32,
+    max_col: u32,
     mis: Vec<String>,
 }
 
 #[get("/getcis?<q>")]
-fn getcis(q: Query) -> Template {
+fn getcis(q: Query) -> Json<TemplateView> {
     let conn = establish_connection();
-    let num_sets = countcis(&conn, q.clone());
+    let (max_mis, max_col) = countcis(&conn, q.clone());
 
-    if num_sets == 0 {
-        let view = TemplateView {
-            sql_offset: 0,
-            start_mis: 0,
+    if max_mis == 0 {
+        let view = 
+        TemplateView {
+            col_offset: 0,
+            mis_offset: 0,
             end_mis: 0,
             max_mis: 0,
+            max_col: 0,
             mis: vec![],
         };
-        return Template::render("view", &view);
+        return Json(view);
     }
 
     let mut sql = create_query(&conn, q);
@@ -220,10 +226,13 @@ fn getcis(q: Query) -> Template {
     let mut old_set_id = 0;
     let mut first = true;
     let mut counter = 0;
-    let mut sql_counter = 0;
+    let mut col_counter = 0;
     let tmp = stmt.execute(()).unwrap();
     for row in tmp {
-        sql_counter = sql_counter + 1;
+        if counter > ROWSPERSITE {
+            break;
+        }
+        col_counter = col_counter + 1;
         let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
             my::from_row::<(String, String, String, String, f64, f64, u32, u32, u32)>(row.unwrap());
         let key = format!(
@@ -233,7 +242,7 @@ fn getcis(q: Query) -> Template {
 
         if old_key != key || old_set_id != s {
             if counter == ROWSPERSITE {
-                sql_counter = sql_counter - 1;
+                col_counter = col_counter - 1;
                 break;
             }
             counter = counter + 1;
@@ -257,27 +266,29 @@ fn getcis(q: Query) -> Template {
             mis.push_str(&format!("{} ", name));
         }
     }
-    //     res.push(old_key + "<td>" + &mis + "</td>");
-
     res.push(format!("{}<td>{}</td>", old_key, &mis));
-    let view = TemplateView {
-        sql_offset: sql_counter,
-        start_mis: 1,
+    
+    let view =   TemplateView {
+        col_offset: col_counter,
+        mis_offset: 1,
         end_mis: counter,
-        max_mis: num_sets,
+        max_mis: max_mis,
+        max_col: max_col,
         mis: res,
     };
-    Template::render("view", &view)
+    
+//     println!("view: {:?}",view);
+    Json(view)
 }
 
 #[get("/getcsv?<q>")]
 fn getcsv(q: Query) -> Stream<Cursor<String>> {
     let conn = establish_connection();
-    let num_sets = countcis(&conn, q.clone());
+    let (max_mis,max_col) = countcis(&conn, q.clone());
 
     let mut stream = "".to_string();
 
-    if num_sets == 0 {
+    if max_mis == 0 {
         return Stream::from(Cursor::new(stream));
     }
 
@@ -301,6 +312,10 @@ fn getcsv(q: Query) -> Stream<Cursor<String>> {
     let mut counter = 0;
     let tmp = stmt.execute(()).unwrap();
     for row in tmp {
+//     tmp.map(|row|{
+        if counter > ROWSPERFILE {
+            break;
+        }
         let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
             my::from_row::<(String, String, String, String, f64, f64, u32, u32, u32)>(row.unwrap());
         let key = format!(
@@ -332,6 +347,7 @@ fn getcsv(q: Query) -> Stream<Cursor<String>> {
             mis.push_str(&format!("{} ", name));
         }
     }
+//     );
     stream.push_str(&format!("{},{}\n", old_key, &mis));
     Stream::from(Cursor::new(stream))
 }
@@ -347,13 +363,14 @@ struct MoreQuery {
     scen: u32,
     mustin: String,
     forbidden: String,
-    offset: u32,
+    col_offset: u32,
     mis_offset: u32,
-    num_sets: u32,
+    max_mis: u32,
+    max_col: u32,
 }
 
 #[get("/getcism?<q>")]
-fn getmorecis(q: MoreQuery) -> Template {
+fn getmorecis(q: MoreQuery) -> Json<TemplateView> {
     let conn = establish_connection();
 
     let qs = Query {
@@ -375,7 +392,7 @@ fn getmorecis(q: MoreQuery) -> Template {
     );
 
     let HARDECODEDLIMIT = 20 * ROWSPERSITE;
-    sql.push_str(&format!(" LIMIT {} OFFSET {}", HARDECODEDLIMIT, q.offset));
+    sql.push_str(&format!(" LIMIT {} OFFSET {}", HARDECODEDLIMIT, q.col_offset));
 
     let mut stmt = conn.prepare(&sql).unwrap();
 
@@ -386,9 +403,12 @@ fn getmorecis(q: MoreQuery) -> Template {
     let mut first = true;
     let mut counter = 0;
 
-    let mut sql_counter = 0;
+    let mut col_counter = 0;
     for row in stmt.execute(()).unwrap() {
-        sql_counter = sql_counter + 1;
+        if counter > ROWSPERSITE {
+            break;
+        }
+        col_counter = col_counter + 1;
         let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
             my::from_row::<(String, String, String, String, f64, f64, u32, u32, u32)>(row.unwrap());
         let key = format!(
@@ -397,7 +417,7 @@ fn getmorecis(q: MoreQuery) -> Template {
         );
         if old_key != key || old_set_id != s {
             if counter == ROWSPERSITE {
-                sql_counter = sql_counter - 1;
+                col_counter = col_counter - 1;
                 break;
             }
             counter = counter + 1;
@@ -422,13 +442,14 @@ fn getmorecis(q: MoreQuery) -> Template {
     }
     res.push(old_key.clone() + "<td>" + &mis + "</td>");
     let view = TemplateView {
-        sql_offset: q.offset + sql_counter,
-        start_mis: q.mis_offset + 1,
+        col_offset: q.col_offset + col_counter,
+        mis_offset: q.mis_offset + 1,
         end_mis: q.mis_offset + counter,
-        max_mis: q.num_sets,
+        max_mis: q.max_mis,
+        max_col: q.max_col,
         mis: res,
     };
-    Template::render("view", &view)
+    Json(view)
 }
 
 fn create_query(conn: &my::Pool, q: Query) -> String {

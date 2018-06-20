@@ -179,26 +179,38 @@
         if (window.XMLHttpRequest) {
             // code for IE7+, Firefox, Chrome, Opera, Safari
             xmlhttp=new XMLHttpRequest();
-            xmlhttp2=new XMLHttpRequest();
         } else { // code for IE6, IE5
             xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
-            xmlhttp2=new ActiveXObject("Microsoft.XMLHTTP");      
         }
-        xmlhttp.open("GET","countcis?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden,true);
-
+                
+        xmlhttp.open("GET","getcis?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden,true);
         xmlhttp.onreadystatechange=function() {
             if (this.readyState==4 && this.status==200) {
-                document.getElementById("txtHint").innerHTML="<br>"+this.responseText+" intervention sets found!";
-                var parent = document.getElementById("dlbutton");
-                parent.innerHTML="";
-                if(this.responseText!="0") {
+                res = JSON.parse(this.responseText);
+                document.getElementById("txtHint").innerHTML="<br>"+res.max_mis+" intervention sets found!";
+                
+                if (res.max_mis!=0) {                
                     var button = document.createElement("INPUT");
                     button.setAttribute("type","button");
-                    button.setAttribute("value","Download as CSV (max 1000)");
+                    if (res.max_mis > 1000) {
+                        button.setAttribute("value","Download as CSV (max 1000)");
+                    }
+                    else {
+                        button.setAttribute("value","Download as CSV");
+                    }
                     button.setAttribute("onclick", "savecis()");
-                    parent.appendChild(button);
+                    document.getElementById("txtHint").appendChild(button);
                 }
+                var content = "<p>Intervention sets <b>"+ res.mis_offset+"</b> to <b>"+res.end_mis+"</b>:</p><br><table><tr><th>Organism</th><th>Model name</th><th>Substrate intake reaction</th><th>Product excretion reaction</th><th>Min biomass yield</th><th>Min product yield</th><th>Scenario</th><th>Intervention set</th></tr>";
+                for (i =0; i < res.mis.length; i++) {
+                    content += "<tr>"+res.mis[i]+"</tr>";
+                }                
+                content+='</table>';
                 
+                if (res.end_mis < res.max_mis) {
+                    content+='<button id="moreb1" type="button" onclick="more('+res.col_offset+','+res.max_col+','+res.end_mis+','+res.max_mis+')">More</button>';
+                }
+                document.getElementById("misResults").innerHTML=content
             }
         };
         xmlhttp.onerror=function() {
@@ -206,26 +218,12 @@
             console.log("readyState: ",this.readyState);
             console.log("status: ",this.status);
         };
-        xmlhttp.send();    
-        
-        xmlhttp2.open("GET","getcis?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden,true);
-        xmlhttp2.onreadystatechange=function() {
-            if (this.readyState==4 && this.status==200) {
-                document.getElementById("misResults").innerHTML=this.responseText;
-            }
-        };
-        xmlhttp2.onerror=function() {
-            console.log("An error occurred.");
-            console.log("readyState: ",this.readyState);
-            console.log("status: ",this.status);
-        };
-        xmlhttp2.send();
+        xmlhttp.send();
     }
 
-    function more( sql_offset, mis_offset, max_mis) {
+    function more( col_offset, max_col, mis_offset, max_mis) {
         document.getElementById("moreb1").disabled = true;
-        if (mis_offset == max_mis ){ 
-            
+        if (mis_offset == max_mis ){            
             var parent = document.getElementById("misResults");
             var child = document.getElementById("moreb1");
             parent.removeChild(child);
@@ -247,23 +245,27 @@
         } else { // code for IE6, IE5
             xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
         }
-        xmlhttp.open("GET","getcism?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden+"&offset="+sql_offset+"&mis_offset="+mis_offset+"&num_sets="+max_mis,true);
+        xmlhttp.open("GET","getcism?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden+"&col_offset="+col_offset+"&max_col="+max_col+"&mis_offset="+mis_offset+"&max_mis="+max_mis,true);
         
         xmlhttp.onreadystatechange=function() {
             if (this.readyState==4 && this.status==200) {
-            
+                res = JSON.parse(this.responseText);
+                console.log("JSON: ",res);
+
                 var parent = document.getElementById("misResults");
                 var child = document.getElementById("moreb1");
                 parent.removeChild(child);
 
-                newcontent = document.getElementById("misResults").innerHTML + this.responseText;
-                document.getElementById("misResults").innerHTML=newcontent
-                if (mis_offset == max_mis ){       
-                    var parent = document.getElementById("misResults");
-                    var child = document.getElementById("moreb1");
-                    parent.removeChild(child);
-            
+                var content = parent.innerHTML + "<p>Intervention sets <b>"+ res.mis_offset+"</b> to <b>"+res.end_mis+"</b>:</p><br><table><tr><th>Organism</th><th>Model name</th><th>Substrate intake reaction</th><th>Product excretion reaction</th><th>Min biomass yield</th><th>Min product yield</th><th>Scenario</th><th>Intervention set</th></tr>";
+                for (i =0; i < res.mis.length; i++) {
+                    content += "<tr>"+res.mis[i]+"</tr>";
                 }
+                content+='</table>';
+                
+                if (res.end_mis < res.max_mis) {
+                    content+='<button id="moreb1" type="button" onclick="more('+res.col_offset+','+res.max_col+','+res.end_mis+','+res.max_mis+')">More</button>';
+                }                
+                document.getElementById("misResults").innerHTML=content
             }
         };
         xmlhttp.onerror=function() {
