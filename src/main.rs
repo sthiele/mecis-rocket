@@ -154,25 +154,18 @@ struct Query {
     forbidden: String,
 }
 
-#[get("/countcis?<q>")]
-fn s_countcis(q: Query) -> String {
-    let conn = establish_connection();
-    format!("{:?}", countcis(&conn, q))
-}
 
 fn countcis(conn: &my::Pool, q: Query) -> (u32,u32) {
     let mut sql = create_query(&conn, q);
-
-//     sql = format!("SELECT COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen,s FROM ({}) AS TX) AS TY", sql);
     sql = format!("SELECT  COUNT(*), SUM(len) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen,len, s FROM ({}) AS TX) AS TY", sql);
 
-    println!("SQL: {}", sql);
+//     println!("SQL: {}", sql);
 
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = vec![];
     for row in stmt.execute(()).unwrap() {
         let cell = my::from_row::<(u32,u32)>(row.unwrap());
-        println!("count {:?}", cell);
+//         println!("count {:?}", cell);
         res.push(cell);
     }
 
@@ -514,7 +507,6 @@ fn create_query(conn: &my::Pool, q: Query) -> String {
 fn rocket() -> rocket::Rocket {
     rocket::ignite()
         .mount("/", routes![mecis])
-        .mount("/", routes![s_countcis])
         .mount("/", routes![getcis])
         .mount("/", routes![getcsv])
         .mount("/", routes![getmorecis])

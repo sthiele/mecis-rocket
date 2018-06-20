@@ -138,16 +138,13 @@
          if (window.XMLHttpRequest) {
             // code for IE7+, Firefox, Chrome, Opera, Safari
             xmlhttp=new XMLHttpRequest();
-            xmlhttp2=new XMLHttpRequest();
         } else { // code for IE6, IE5
-            xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
-            xmlhttp2=new ActiveXObject("Microsoft.XMLHTTP");      
+            xmlhttp=new ActiveXObject("Microsoft.XMLHTTP"); 
         }
         xmlhttp.open("GET","getcsv?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden,true);
 
         xmlhttp.onreadystatechange=function() {
             if (this.readyState==4 && this.status==200) {
-                
                 newWindow = window.open("data:text/csv," + encodeURIComponent(this.responseText), "mecisresults.csv");
             }
         };
