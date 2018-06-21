@@ -185,7 +185,7 @@
             if (this.readyState==4 && this.status==200) {
                 res = JSON.parse(this.responseText);
                 document.getElementById("txtHint").innerHTML="<br>"+res.max_mis+" intervention sets found!";
-                
+                var content = "";
                 if (res.max_mis!=0) {                
                     var button = document.createElement("INPUT");
                     button.setAttribute("type","button");
@@ -197,15 +197,16 @@
                     }
                     button.setAttribute("onclick", "savecis()");
                     document.getElementById("txtHint").appendChild(button);
-                }
-                var content = "<p>Intervention sets <b>"+ res.mis_offset+"</b> to <b>"+res.end_mis+"</b>:</p><br><table><tr><th>Organism</th><th>Model name</th><th>Substrate intake reaction</th><th>Product excretion reaction</th><th>Min biomass yield</th><th>Min product yield</th><th>Scenario</th><th>Intervention set</th></tr>";
-                for (i =0; i < res.mis.length; i++) {
-                    content += "<tr>"+res.mis[i]+"</tr>";
-                }                
-                content+='</table>';
                 
-                if (res.end_mis < res.max_mis) {
-                    content+='<button id="moreb1" type="button" onclick="more('+res.col_offset+','+res.end_mis+','+res.max_mis+')">More</button>';
+                    content = "<p>Intervention sets <b>"+ res.mis_offset+"</b> to <b>"+res.end_mis+"</b>:</p><br><table><tr><th>Organism</th><th>Model name</th><th>Substrate intake reaction</th><th>Product excretion reaction</th><th>Min biomass yield</th><th>Min product yield</th><th>Scenario</th><th>Intervention set</th></tr>";
+                    for (i =0; i < res.mis.length; i++) {
+                        content += "<tr>"+res.mis[i]+"</tr>";
+                    }                
+                    content+='</table>';
+                    
+                    if (res.end_mis < res.max_mis) {
+                        content+='<button id="moreb1" type="button" onclick="more('+res.col_offset+','+res.end_mis+','+res.max_mis+')">More</button>';
+                    }
                 }
                 document.getElementById("misResults").innerHTML=content
             }
@@ -247,7 +248,6 @@
         xmlhttp.onreadystatechange=function() {
             if (this.readyState==4 && this.status==200) {
                 res = JSON.parse(this.responseText);
-                console.log("JSON: ",res);
 
                 var parent = document.getElementById("misResults");
                 var child = document.getElementById("moreb1");
