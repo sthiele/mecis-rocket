@@ -35,7 +35,7 @@ fn mecis_logo() -> NamedFile {
 }
 
 #[derive(Serialize)]
-struct TemplateContext {
+struct MecisInfo {
     organism: Vec<String>,
     model: Vec<String>,
     inreac: Vec<String>,
@@ -98,7 +98,7 @@ fn mecis() -> Template {
         .map(|row| my::from_row::<u32>(row.unwrap()))
         .collect();
 
-    let context = TemplateContext {
+    let context = MecisInfo {
         organism: v_orgs,
         model: v_models,
         inreac: v_inreacs,
@@ -175,7 +175,7 @@ fn countcis(conn: &my::Pool, q: Query) -> u32 {
 }
 
 #[derive(Serialize,Debug)]
-struct TemplateView {
+struct QueryResult {
     col_offset: u32,
     mis_offset: u32,
     end_mis: u32,
@@ -184,13 +184,13 @@ struct TemplateView {
 }
 
 #[get("/getcis?<q>")]
-fn getcis(q: Query) -> Json<TemplateView> {
+fn getcis(q: Query) -> Json<QueryResult> {
     let conn = establish_connection();
     let max_mis = countcis(&conn, q.clone());
 
     if max_mis == 0 {
         let view = 
-        TemplateView {
+        QueryResult {
             col_offset: 0,
             mis_offset: 0,
             end_mis: 0,
@@ -261,7 +261,7 @@ fn getcis(q: Query) -> Json<TemplateView> {
     }
     res.push(format!("{}<td>{}</td>", old_key, &mis));
     
-    let view =   TemplateView {
+    let view =   QueryResult {
         col_offset: col_counter,
         mis_offset: 1,
         end_mis: counter,
@@ -338,7 +338,6 @@ fn getcsv(q: Query) -> Stream<Cursor<String>> {
             mis.push_str(&format!("{} ", name));
         }
     }
-//     );
     stream.push_str(&format!("{},{}\n", old_key, &mis));
     Stream::from(Cursor::new(stream))
 }
@@ -360,7 +359,7 @@ struct MoreQuery {
 }
 
 #[get("/getcism?<q>")]
-fn getmorecis(q: MoreQuery) -> Json<TemplateView> {
+fn getmorecis(q: MoreQuery) -> Json<QueryResult> {
     let conn = establish_connection();
 
     let qs = Query {
@@ -431,7 +430,7 @@ fn getmorecis(q: MoreQuery) -> Json<TemplateView> {
         }
     }
     res.push(old_key.clone() + "<td>" + &mis + "</td>");
-    let view = TemplateView {
+    let view = QueryResult {
         col_offset: q.col_offset + col_counter,
         mis_offset: q.mis_offset + 1,
         end_mis: q.mis_offset + counter,
