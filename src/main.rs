@@ -18,6 +18,8 @@ use std::cmp::Ordering;
 use std::env;
 use std::io::Cursor;
 
+
+const MAX_IS_SIZE: u32 = 20;
 const ROWSPERSITE: u32 = 50;
 const ROWSPERFILE: u32 = 1000;
 
@@ -155,16 +157,16 @@ struct Query {
 }
 
 
-fn countcis(conn: &my::Pool, q: Query) -> (u32,u32) {
+fn countcis(conn: &my::Pool, q: Query) -> u32 {
     let mut sql = create_query(&conn, q);
-    sql = format!("SELECT  COUNT(*), SUM(len) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen,len, s FROM ({}) AS TX) AS TY", sql);
+    sql = format!("SELECT  COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen, s FROM ({}) AS TX) AS TY", sql);
 
 //     println!("SQL: {}", sql);
 
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = vec![];
     for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<(u32,u32)>(row.unwrap());
+        let cell : u32 = my::from_row(row.unwrap());
 //         println!("count {:?}", cell);
         res.push(cell);
     }
@@ -178,14 +180,13 @@ struct TemplateView {
     mis_offset: u32,
     end_mis: u32,
     max_mis: u32,
-    max_col: u32,
     mis: Vec<String>,
 }
 
 #[get("/getcis?<q>")]
 fn getcis(q: Query) -> Json<TemplateView> {
     let conn = establish_connection();
-    let (max_mis, max_col) = countcis(&conn, q.clone());
+    let max_mis = countcis(&conn, q.clone());
 
     if max_mis == 0 {
         let view = 
@@ -194,7 +195,6 @@ fn getcis(q: Query) -> Json<TemplateView> {
             mis_offset: 0,
             end_mis: 0,
             max_mis: 0,
-            max_col: 0,
             mis: vec![],
         };
         return Json(view);
@@ -207,8 +207,8 @@ fn getcis(q: Query) -> Json<TemplateView> {
         sql
     );
 
-    let HARDECODEDLIMIT = 20 * ROWSPERSITE;
-    sql.push_str(&format!(" LIMIT {}", HARDECODEDLIMIT));
+    let limit = MAX_IS_SIZE * ROWSPERSITE;
+    sql.push_str(&format!(" LIMIT {}", limit));
 
     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
@@ -266,7 +266,6 @@ fn getcis(q: Query) -> Json<TemplateView> {
         mis_offset: 1,
         end_mis: counter,
         max_mis: max_mis,
-        max_col: max_col,
         mis: res,
     };
     
@@ -277,7 +276,7 @@ fn getcis(q: Query) -> Json<TemplateView> {
 #[get("/getcsv?<q>")]
 fn getcsv(q: Query) -> Stream<Cursor<String>> {
     let conn = establish_connection();
-    let (max_mis,max_col) = countcis(&conn, q.clone());
+    let max_mis = countcis(&conn, q.clone());
 
     let mut stream = "".to_string();
 
@@ -292,8 +291,8 @@ fn getcsv(q: Query) -> Stream<Cursor<String>> {
         sql
     );
 
-    let HARDECODEDLIMIT = 20 * ROWSPERFILE;
-    sql.push_str(&format!(" LIMIT {}", HARDECODEDLIMIT));
+    let limit = MAX_IS_SIZE * ROWSPERFILE;
+    sql.push_str(&format!(" LIMIT {}", limit));
 
     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
@@ -305,7 +304,6 @@ fn getcsv(q: Query) -> Stream<Cursor<String>> {
     let mut counter = 0;
     let tmp = stmt.execute(()).unwrap();
     for row in tmp {
-//     tmp.map(|row|{
         if counter > ROWSPERFILE {
             break;
         }
@@ -359,7 +357,6 @@ struct MoreQuery {
     col_offset: u32,
     mis_offset: u32,
     max_mis: u32,
-    max_col: u32,
 }
 
 #[get("/getcism?<q>")]
@@ -384,8 +381,8 @@ fn getmorecis(q: MoreQuery) -> Json<TemplateView> {
         sql
     );
 
-    let HARDECODEDLIMIT = 20 * ROWSPERSITE;
-    sql.push_str(&format!(" LIMIT {} OFFSET {}", HARDECODEDLIMIT, q.col_offset));
+    let limit = MAX_IS_SIZE * ROWSPERSITE;
+    sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, q.col_offset));
 
     let mut stmt = conn.prepare(&sql).unwrap();
 
@@ -439,7 +436,6 @@ fn getmorecis(q: MoreQuery) -> Json<TemplateView> {
         mis_offset: q.mis_offset + 1,
         end_mis: q.mis_offset + counter,
         max_mis: q.max_mis,
-        max_col: q.max_col,
         mis: res,
     };
     Json(view)

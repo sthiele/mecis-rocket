@@ -205,7 +205,7 @@
                 content+='</table>';
                 
                 if (res.end_mis < res.max_mis) {
-                    content+='<button id="moreb1" type="button" onclick="more('+res.col_offset+','+res.max_col+','+res.end_mis+','+res.max_mis+')">More</button>';
+                    content+='<button id="moreb1" type="button" onclick="more('+res.col_offset+','+res.end_mis+','+res.max_mis+')">More</button>';
                 }
                 document.getElementById("misResults").innerHTML=content
             }
@@ -218,7 +218,7 @@
         xmlhttp.send();
     }
 
-    function more( col_offset, max_col, mis_offset, max_mis) {
+    function more( col_offset, mis_offset, max_mis) {
         document.getElementById("moreb1").disabled = true;
         if (mis_offset == max_mis ){            
             var parent = document.getElementById("misResults");
@@ -242,7 +242,7 @@
         } else { // code for IE6, IE5
             xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
         }
-        xmlhttp.open("GET","getcism?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden+"&col_offset="+col_offset+"&max_col="+max_col+"&mis_offset="+mis_offset+"&max_mis="+max_mis,true);
+        xmlhttp.open("GET","getcism?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden+"&col_offset="+col_offset+"&mis_offset="+mis_offset+"&max_mis="+max_mis,true);
         
         xmlhttp.onreadystatechange=function() {
             if (this.readyState==4 && this.status==200) {
@@ -260,7 +260,7 @@
                 content+='</table>';
                 
                 if (res.end_mis < res.max_mis) {
-                    content+='<button id="moreb1" type="button" onclick="more('+res.col_offset+','+res.max_col+','+res.end_mis+','+res.max_mis+')">More</button>';
+                    content+='<button id="moreb1" type="button" onclick="more('+res.col_offset+','+res.end_mis+','+res.max_mis+')">More</button>';
                 }                
                 document.getElementById("misResults").innerHTML=content
             }
