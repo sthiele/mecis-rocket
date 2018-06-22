@@ -120,42 +120,6 @@
   </body>
   <script>
   
-    function savecis() {
-        var p0 = document.getElementById("organism").value;
-        var p1 = document.getElementById("p1").value;
-        var p2 = document.getElementById("p2").value;
-        var p3 = document.getElementById("p3").value;
-        var p4 = document.getElementById("p4").value;
-        var p5 = document.getElementById("p5").value;
-        var p6 = document.getElementById("p6").value;
-        var mustin = document.getElementById("mustin").value;
-        var forbidden = document.getElementById("forbidden").value;
-        
-        if (p0=="") {
-            document.getElementById("txtHint").innerHTML="<p>You need to select an organism!</p>";
-            return;
-        }
-         if (window.XMLHttpRequest) {
-            // code for IE7+, Firefox, Chrome, Opera, Safari
-            xmlhttp=new XMLHttpRequest();
-        } else { // code for IE6, IE5
-            xmlhttp=new ActiveXObject("Microsoft.XMLHTTP"); 
-        }
-        xmlhttp.open("GET","getcsv?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden,true);
-
-        xmlhttp.onreadystatechange=function() {
-            if (this.readyState==4 && this.status==200) {
-                newWindow = window.open("data:text/csv," + encodeURIComponent(this.responseText), "mecisresults.csv");
-            }
-        };
-        xmlhttp.onerror=function() {
-            console.log("An error occurred.");
-            console.log("readyState: ",this.readyState);
-            console.log("status: ",this.status);
-        };
-        xmlhttp.send();    
-    }
-
     function showCIS() {
         var p0 = document.getElementById("organism").value;
         var p1 = document.getElementById("p1").value;
@@ -272,7 +236,42 @@
         };
         xmlhttp.send();
     }
+    
+    function savecis() {
+        var p0 = document.getElementById("organism").value;
+        var p1 = document.getElementById("p1").value;
+        var p2 = document.getElementById("p2").value;
+        var p3 = document.getElementById("p3").value;
+        var p4 = document.getElementById("p4").value;
+        var p5 = document.getElementById("p5").value;
+        var p6 = document.getElementById("p6").value;
+        var mustin = document.getElementById("mustin").value;
+        var forbidden = document.getElementById("forbidden").value;
+        
+        if (p0=="") {
+            document.getElementById("txtHint").innerHTML="<p>You need to select an organism!</p>";
+            return;
+        }
+         if (window.XMLHttpRequest) {
+            // code for IE7+, Firefox, Chrome, Opera, Safari
+            xmlhttp=new XMLHttpRequest();
+        } else { // code for IE6, IE5
+            xmlhttp=new ActiveXObject("Microsoft.XMLHTTP"); 
+        }
+        xmlhttp.open("GET","getcsv?organism="+p0+"&model="+p1+"&inreac="+p2+"&exreac="+p3+"&mby="+p4+"&mpy="+p5+"&scen="+p6+"&mustin="+mustin+"&forbidden="+forbidden,true);
 
+        xmlhttp.onreadystatechange=function() {
+            if (this.readyState==4 && this.status==200) {
+                newWindow = window.open("data:text/csv," + encodeURIComponent(this.responseText), "mecisresults.csv");
+            }
+        };
+        xmlhttp.onerror=function() {
+            console.log("An error occurred.");
+            console.log("readyState: ",this.readyState);
+            console.log("status: ",this.status);
+        };
+        xmlhttp.send();    
+    }
   </script>
   
 </html>

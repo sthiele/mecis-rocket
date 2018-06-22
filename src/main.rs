@@ -12,12 +12,11 @@ use dotenv::dotenv;
 use mysql as my;
 use rocket::response::NamedFile;
 use rocket::response::Stream;
-use rocket_contrib::Template;
 use rocket_contrib::Json;
+use rocket_contrib::Template;
 use std::cmp::Ordering;
 use std::env;
 use std::io::Cursor;
-
 
 const MAX_IS_SIZE: u32 = 20;
 const ROWSPERSITE: u32 = 50;
@@ -49,50 +48,45 @@ struct MecisInfo {
 fn mecis() -> Template {
     let conn = establish_connection();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT organism as bla FROM mis")
-        .unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT organism FROM mis").unwrap();
     let v_orgs = stmt.execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT model as bla FROM mis")
-        .unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT model FROM mis").unwrap();
     let v_models = stmt.execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT inreac as bla FROM mis")
-        .unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT inreac FROM mis").unwrap();
     let v_inreacs = stmt.execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT exreac as bla FROM mis")
-        .unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT exreac FROM mis").unwrap();
     let v_exreacs = stmt.execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT mby as bla FROM mis").unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT mby FROM mis").unwrap();
     let mut v_mbys: Vec<f64> = stmt.execute(())
         .unwrap()
         .map(|row| my::from_row::<f64>(row.unwrap()))
         .collect();
     v_mbys.sort_by(|a, b| mcmp(a, b));
 
-    let mut stmt = conn.prepare("SELECT DISTINCT mpy as bla FROM mis").unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT mpy FROM mis").unwrap();
     let mut v_mpys: Vec<f64> = stmt.execute(())
         .unwrap()
         .map(|row| my::from_row::<f64>(row.unwrap()))
         .collect();
     v_mpys.sort_by(|a, b| mcmp(a, b));
 
-    let mut stmt = conn.prepare("SELECT DISTINCT scen as bla FROM mis")
-        .unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT scen FROM mis").unwrap();
     let v_scens = stmt.execute(())
         .unwrap()
         .map(|row| my::from_row::<u32>(row.unwrap()))
@@ -124,9 +118,10 @@ fn id2keggid(conn: &my::Pool, id: u32) -> Option<String> {
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = None;
     for row in stmt.execute(()).unwrap() {
-        if let Ok(cell) = my::from_row_opt::<String>(row.unwrap()){
-          res = Some(cell);
-        }}
+        if let Ok(cell) = my::from_row_opt::<String>(row.unwrap()) {
+            res = Some(cell);
+        }
+    }
     res
 }
 fn id2biggid(conn: &my::Pool, id: u32) -> Option<String> {
@@ -134,9 +129,10 @@ fn id2biggid(conn: &my::Pool, id: u32) -> Option<String> {
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = None;
     for row in stmt.execute(()).unwrap() {
-        if let Ok(cell) = my::from_row_opt::<String>(row.unwrap()){
-          res = Some(cell);
-        }}
+        if let Ok(cell) = my::from_row_opt::<String>(row.unwrap()) {
+            res = Some(cell);
+        }
+    }
     res
 }
 fn name2id(conn: &my::Pool, name: &str) -> Option<u32> {
@@ -173,25 +169,19 @@ struct Query {
     forbidden: String,
 }
 
-
 fn countcis(conn: &my::Pool, q: Query) -> u32 {
     let mut sql = create_query(&conn, q);
     sql = format!("SELECT  COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen, s FROM ({}) AS TX) AS TY", sql);
-
     println!("SQL: {}", sql);
-
     let mut stmt = conn.prepare(sql).unwrap();
-    let mut res = vec![];
-    for row in stmt.execute(()).unwrap() {
-        let cell : u32 = my::from_row(row.unwrap());
-//         println!("count {:?}", cell);
-        res.push(cell);
-    }
 
-    res[0]
+    for row in stmt.execute(()).unwrap() {
+        return my::from_row(row.unwrap());
+    }
+    return 0;
 }
 
-#[derive(Serialize,Debug)]
+#[derive(Serialize, Debug)]
 struct QueryResult {
     col_offset: u32,
     mis_offset: u32,
@@ -200,17 +190,23 @@ struct QueryResult {
     mis: Vec<String>,
 }
 
-
 fn create_reaction_string(conn: &my::Pool, mecisid: u32) -> String {
     let name = id2name(&conn, mecisid);
     if let Some(keggid) = id2keggid(&conn, mecisid) {
-        format!("<a href=\"https://www.genome.jp/dbget-bin/www_bget?{}\">{}</a> ",keggid, name)
+        format!(
+            "<a href=\"https://www.genome.jp/dbget-bin/www_bget?{}\">{}</a> ",
+            keggid, name
+        )
     } else {
         if let Some(biggid) = id2biggid(&conn, mecisid) {
-            format!("<a href=\"http://bigg.ucsd.edu/universal/reactions/{}\">{}</a> ",biggid, name)
-        }               
-        else { format!("{} ",name) }
-   }
+            format!(
+                "<a href=\"http://bigg.ucsd.edu/universal/reactions/{}\">{}</a> ",
+                biggid, name
+            )
+        } else {
+            format!("{} ", name)
+        }
+    }
 }
 
 #[get("/getcis?<q>")]
@@ -219,8 +215,7 @@ fn getcis(q: Query) -> Json<QueryResult> {
     let max_mis = countcis(&conn, q.clone());
 
     if max_mis == 0 {
-        let view = 
-        QueryResult {
+        let view = QueryResult {
             col_offset: 0,
             mis_offset: 0,
             end_mis: 0,
@@ -231,15 +226,12 @@ fn getcis(q: Query) -> Json<QueryResult> {
     }
 
     let mut sql = create_query(&conn, q);
-
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
         sql
     );
-
     let limit = MAX_IS_SIZE * ROWSPERSITE;
     sql.push_str(&format!(" LIMIT {}", limit));
-
     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
 
@@ -274,14 +266,14 @@ fn getcis(q: Query) -> Json<QueryResult> {
                 old_key = key;
                 old_set_id = s;
                 let string = create_reaction_string(&conn, r);
-                mis.push_str(&string); 
+                mis.push_str(&string);
             } else {
                 res.push(format!("{}<td>{}</td>", old_key, &mis));
                 old_key = key;
                 old_set_id = s;
-                mis = "".to_string();                
+                mis = "".to_string();
                 let string = create_reaction_string(&conn, r);
-                mis.push_str(&string); 
+                mis.push_str(&string);
             }
         } else {
             let string = create_reaction_string(&conn, r);
@@ -289,16 +281,16 @@ fn getcis(q: Query) -> Json<QueryResult> {
         }
     }
     res.push(format!("{}<td>{}</td>", old_key, &mis));
-    
-    let view =   QueryResult {
+
+    let view = QueryResult {
         col_offset: col_counter,
         mis_offset: 1,
         end_mis: counter,
         max_mis: max_mis,
         mis: res,
     };
-    
-//     println!("view: {:?}",view);
+
+    //     println!("view: {:?}",view);
     Json(view)
 }
 
@@ -314,15 +306,12 @@ fn getcsv(q: Query) -> Stream<Cursor<String>> {
     }
 
     let mut sql = create_query(&conn, q);
-
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
         sql
     );
-
     let limit = MAX_IS_SIZE * ROWSPERFILE;
     sql.push_str(&format!(" LIMIT {}", limit));
-
     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
 
@@ -403,15 +392,12 @@ fn getmorecis(q: MoreQuery) -> Json<QueryResult> {
         forbidden: q.forbidden,
     };
     let mut sql = create_query(&conn, qs);
-
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
         sql
     );
-
     let limit = MAX_IS_SIZE * ROWSPERSITE;
     sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, q.col_offset));
-
     let mut stmt = conn.prepare(&sql).unwrap();
 
     let mut res = vec![];
@@ -459,6 +445,7 @@ fn getmorecis(q: MoreQuery) -> Json<QueryResult> {
         }
     }
     res.push(old_key.clone() + "<td>" + &mis + "</td>");
+
     let view = QueryResult {
         col_offset: q.col_offset + col_counter,
         mis_offset: q.mis_offset + 1,
@@ -470,7 +457,6 @@ fn getmorecis(q: MoreQuery) -> Json<QueryResult> {
 }
 
 fn create_query(conn: &my::Pool, q: Query) -> String {
-
     let mut sql = "SELECT * FROM mis WHERE 1".to_string();
     if q.organism != "None" {
         sql.push_str(" AND organism='");
@@ -513,27 +499,29 @@ fn create_query(conn: &my::Pool, q: Query) -> String {
     let mut counter = 1;
 
     while let Some(r) = mustin.next() {
-        if let Some(mecisid) = name2id(conn, r){
-        outer_sql = format!(
+        if let Some(mecisid) = name2id(conn, r) {
+            outer_sql = format!(
             "{} AND EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
-        counter = counter + 1;
+            counter = counter + 1;
         } else {
-        outer_sql = format!(
-            "{} AND 1=0", outer_sql);
-        
-        } 
+            outer_sql = format!("{} AND 1=0", outer_sql);
+        }
     }
 
     while let Some(r) = forbidden.next() {
-    
         if let Some(mecisid) = name2id(conn, r) {
-        outer_sql = format!(
+            outer_sql = format!(
             "{} AND NOT EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
-        counter = counter + 1;
+            counter = counter + 1;
         }
     }
-    
+
     outer_sql
+}
+
+#[error(404)]
+fn not_found(req: &rocket::request::Request) -> String {
+    format!("Not found.\n Request {}", req)
 }
 
 fn rocket() -> rocket::Rocket {
@@ -544,10 +532,9 @@ fn rocket() -> rocket::Rocket {
         .mount("/", routes![getmorecis])
         .mount("/", routes![mecis_logo])
         .attach(Template::fairing())
-    //         .catch(errors![not_found])
+        .catch(errors![not_found])
 }
 
 fn main() {
     rocket().launch();
 }
-
