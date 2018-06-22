@@ -113,23 +113,40 @@ fn mecis() -> Template {
 fn id2name(conn: &my::Pool, id: u32) -> String {
     let sql = format!("SELECT name FROM reactions WHERE mecisid={}", id);
     let mut stmt = conn.prepare(sql).unwrap();
-    let mut res = vec![];
+    let mut res = "".to_string();
     for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<String>(row.unwrap());
-        res.push(cell);
+        res = my::from_row::<String>(row.unwrap());
     }
-    res[0].clone()
+    res
 }
-
-fn name2id(conn: &my::Pool, name: &str) -> u32 {
+fn id2keggid(conn: &my::Pool, id: u32) -> Option<String> {
+    let sql = format!("SELECT keggid FROM reactions WHERE mecisid={}", id);
+    let mut stmt = conn.prepare(sql).unwrap();
+    let mut res = None;
+    for row in stmt.execute(()).unwrap() {
+        if let Ok(cell) = my::from_row_opt::<String>(row.unwrap()){
+          res = Some(cell);
+        }}
+    res
+}
+fn id2biggid(conn: &my::Pool, id: u32) -> Option<String> {
+    let sql = format!("SELECT biggid FROM reactions WHERE mecisid={}", id);
+    let mut stmt = conn.prepare(sql).unwrap();
+    let mut res = None;
+    for row in stmt.execute(()).unwrap() {
+        if let Ok(cell) = my::from_row_opt::<String>(row.unwrap()){
+          res = Some(cell);
+        }}
+    res
+}
+fn name2id(conn: &my::Pool, name: &str) -> Option<u32> {
     let sql = format!("SELECT mecisid FROM reactions WHERE name='{}'", name);
     let mut stmt = conn.prepare(sql).unwrap();
-    let mut res = vec![];
+    let mut res = None;
     for row in stmt.execute(()).unwrap() {
-        let cell = my::from_row::<u32>(row.unwrap());
-        res.push(cell);
+        res = Some(my::from_row::<u32>(row.unwrap()));
     }
-    res[0]
+    res
 }
 
 // compare f64 panic on NaN
@@ -161,7 +178,7 @@ fn countcis(conn: &my::Pool, q: Query) -> u32 {
     let mut sql = create_query(&conn, q);
     sql = format!("SELECT  COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen, s FROM ({}) AS TX) AS TY", sql);
 
-//     println!("SQL: {}", sql);
+    println!("SQL: {}", sql);
 
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = vec![];
@@ -181,6 +198,19 @@ struct QueryResult {
     end_mis: u32,
     max_mis: u32,
     mis: Vec<String>,
+}
+
+
+fn create_reaction_string(conn: &my::Pool, mecisid: u32) -> String {
+    let name = id2name(&conn, mecisid);
+    if let Some(keggid) = id2keggid(&conn, mecisid) {
+        format!("<a href=\"https://www.genome.jp/dbget-bin/www_bget?{}\">{}</a> ",keggid, name)
+    } else {
+        if let Some(biggid) = id2biggid(&conn, mecisid) {
+            format!("<a href=\"http://bigg.ucsd.edu/universal/reactions/{}\">{}</a> ",biggid, name)
+        }               
+        else { format!("{} ",name) }
+   }
 }
 
 #[get("/getcis?<q>")]
@@ -243,20 +273,19 @@ fn getcis(q: Query) -> Json<QueryResult> {
                 first = false;
                 old_key = key;
                 old_set_id = s;
-                let name = id2name(&conn, r);
-                mis.push_str(&format!("{} ", name));
+                let string = create_reaction_string(&conn, r);
+                mis.push_str(&string); 
             } else {
-                //                 res.push(old_key + "<td>" + &mis + "</td>");
                 res.push(format!("{}<td>{}</td>", old_key, &mis));
                 old_key = key;
                 old_set_id = s;
-                mis = "".to_string();
-                let name = id2name(&conn, r);
-                mis.push_str(&format!("{} ", name));
+                mis = "".to_string();                
+                let string = create_reaction_string(&conn, r);
+                mis.push_str(&string); 
             }
         } else {
-            let name = id2name(&conn, r);
-            mis.push_str(&format!("{} ", name));
+            let string = create_reaction_string(&conn, r);
+            mis.push_str(&string);
         }
     }
     res.push(format!("{}<td>{}</td>", old_key, &mis));
@@ -414,19 +443,19 @@ fn getmorecis(q: MoreQuery) -> Json<QueryResult> {
                 first = false;
                 old_key = key.clone();
                 old_set_id = s;
-                let name = id2name(&conn, r);
-                mis.push_str(&format!("{} ", name));
+                let string = create_reaction_string(&conn, r);
+                mis.push_str(&string);
             } else {
                 res.push(old_key.clone() + "<td>" + &mis + "</td>");
                 old_key = key.clone();
                 old_set_id = s;
                 mis = "".to_string();
-                let name = id2name(&conn, r);
-                mis.push_str(&format!("{} ", name));
+                let string = create_reaction_string(&conn, r);
+                mis.push_str(&string);
             }
         } else {
-            let name = id2name(&conn, r);
-            mis.push_str(&format!("{} ", name));
+            let string = create_reaction_string(&conn, r);
+            mis.push_str(&string);
         }
     }
     res.push(old_key.clone() + "<td>" + &mis + "</td>");
@@ -441,6 +470,7 @@ fn getmorecis(q: MoreQuery) -> Json<QueryResult> {
 }
 
 fn create_query(conn: &my::Pool, q: Query) -> String {
+
     let mut sql = "SELECT * FROM mis WHERE 1".to_string();
     if q.organism != "None" {
         sql.push_str(" AND organism='");
@@ -483,19 +513,26 @@ fn create_query(conn: &my::Pool, q: Query) -> String {
     let mut counter = 1;
 
     while let Some(r) = mustin.next() {
-        let mecisid = name2id(conn, r);
+        if let Some(mecisid) = name2id(conn, r){
         outer_sql = format!(
             "{} AND EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
         counter = counter + 1;
+        } else {
+        outer_sql = format!(
+            "{} AND 1=0", outer_sql);
+        
+        } 
     }
 
     while let Some(r) = forbidden.next() {
-        let mecisid = name2id(conn, r);
+    
+        if let Some(mecisid) = name2id(conn, r) {
         outer_sql = format!(
             "{} AND NOT EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
         counter = counter + 1;
+        }
     }
-
+    
     outer_sql
 }
 
