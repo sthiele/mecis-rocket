@@ -35,17 +35,24 @@ fn mecis_logo() -> NamedFile {
 
 #[derive(Serialize)]
 struct MecisInfo {
-    organism: Vec<String>,
-    model: Vec<String>,
-    inreac: Vec<String>,
-    exreac: Vec<String>,
-    mby: Vec<f64>,
-    mpy: Vec<f64>,
-    scen: Vec<u32>,
+    organisms: Vec<String>,
+    models: Vec<String>,
+    inreacs: Vec<String>,
+    exreacs: Vec<String>,
+    reactions: Vec<String>,
+    mbys: Vec<f64>,
+    mpys: Vec<f64>,
+    scens: Vec<u32>,
 }
 
 #[get("/")]
 fn mecis() -> Template {
+    let bla: u32 = 0;
+    Template::render("mecis", bla)
+}
+
+#[get("/meciscontext")]
+fn mecis_info() -> Json<MecisInfo> {
     let conn = establish_connection();
 
     let mut stmt = conn.prepare("SELECT DISTINCT organism FROM mis").unwrap();
@@ -92,16 +99,23 @@ fn mecis() -> Template {
         .map(|row| my::from_row::<u32>(row.unwrap()))
         .collect();
 
+    let mut stmt = conn.prepare("SELECT name FROM reactions").unwrap();
+    let v_reactions = stmt.execute(())
+        .unwrap()
+        .map(|row| my::from_row::<String>(row.unwrap()))
+        .collect();
+
     let context = MecisInfo {
-        organism: v_orgs,
-        model: v_models,
-        inreac: v_inreacs,
-        exreac: v_exreacs,
-        mby: v_mbys,
-        mpy: v_mpys,
-        scen: v_scens,
+        organisms: v_orgs,
+        models: v_models,
+        inreacs: v_inreacs,
+        exreacs: v_exreacs,
+        mbys: v_mbys,
+        mpys: v_mpys,
+        scens: v_scens,
+        reactions: v_reactions,
     };
-    Template::render("mecis", &context)
+    Json(context)
 }
 
 fn id2name(conn: &my::Pool, id: u32) -> String {
@@ -167,10 +181,11 @@ struct Query {
     scen: u32,
     mustin: String,
     forbidden: String,
+    col_offset: u32,
 }
 
 fn countcis(conn: &my::Pool, q: Query) -> u32 {
-    let mut sql = create_query(&conn, q);
+    let mut sql = create_query(&conn, &q);
     sql = format!("SELECT  COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen, s FROM ({}) AS TX) AS TY", sql);
     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(sql).unwrap();
@@ -181,63 +196,99 @@ fn countcis(conn: &my::Pool, q: Query) -> u32 {
     return 0;
 }
 
-#[derive(Serialize, Debug)]
-struct QueryResult {
-    col_offset: u32,
-    mis_offset: u32,
-    end_mis: u32,
-    max_mis: u32,
-    mis: Vec<String>,
+#[derive(Serialize, PartialOrd, PartialEq, Clone, Debug)]
+struct ResponseRoW {
+    organism: String,
+    model: String,
+    inreac: String,
+    exreac: String,
+    mby: f64,
+    mpy: f64,
+    scen: u32,
+    mis: Vec<KnockOut>,
+}
+#[derive(Serialize, PartialOrd, PartialEq, Clone, Debug)]
+struct KnockOut {
+    name: String,
+    link: Option<String>,
 }
 
-fn create_reaction_string(conn: &my::Pool, mecisid: u32) -> String {
+#[derive(Serialize, Debug)]
+struct QueryResponse {
+    col_offset: u32,
+    max_mis: u32,
+    rows: Vec<ResponseRoW>,
+}
+
+fn create_intervention(conn: &my::Pool, mecisid: u32) -> KnockOut {
     let name = id2name(&conn, mecisid);
     if let Some(keggid) = id2keggid(&conn, mecisid) {
-        format!(
-            "<a href=\"https://www.genome.jp/dbget-bin/www_bget?{}\">{}</a> ",
-            keggid, name
-        )
+        KnockOut {
+            name: name,
+            link: Some(format!(
+                "https://www.genome.jp/dbget-bin/www_bget?{}",
+                keggid
+            )),
+        }
     } else {
         if let Some(biggid) = id2biggid(&conn, mecisid) {
-            format!(
-                "<a href=\"http://bigg.ucsd.edu/universal/reactions/{}\">{}</a> ",
-                biggid, name
-            )
+            KnockOut {
+                name: name,
+                link: Some(format!(
+                    "http://bigg.ucsd.edu/universal/reactions/{} ",
+                    biggid
+                )),
+            }
         } else {
-            format!("{} ", name)
+            KnockOut {
+                name: name,
+                link: None,
+            }
         }
     }
 }
 
 #[get("/getcis?<q>")]
-fn getcis(q: Query) -> Json<QueryResult> {
+fn getcis(q: Query) -> Json<QueryResponse> {
     let conn = establish_connection();
-    let max_mis = countcis(&conn, q.clone());
-
-    if max_mis == 0 {
-        let view = QueryResult {
-            col_offset: 0,
-            mis_offset: 0,
-            end_mis: 0,
-            max_mis: 0,
-            mis: vec![],
-        };
-        return Json(view);
+    let max_mis;
+    if q.col_offset == 0 {
+        max_mis = countcis(&conn, q.clone());
+        if max_mis == 0 {
+            let view = QueryResponse {
+                col_offset: 0,
+                max_mis: 0,
+                rows: vec![],
+            };
+            return Json(view);
+        }
+    } else {
+        max_mis = 0;
     }
 
-    let mut sql = create_query(&conn, q);
+    let mut sql = create_query(&conn, &q);
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
         sql
     );
     let limit = MAX_IS_SIZE * ROWSPERSITE;
-    sql.push_str(&format!(" LIMIT {}", limit));
+    sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, q.col_offset));
     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
 
-    let mut res = vec![];
-    let mut mis = "".to_string();
-    let mut old_key = "".to_string();
+    let mut rows = vec![];
+    let mut mis = vec![];
+    let mut old_key = //"".to_string();
+     ResponseRoW{
+                    organism : "".to_string(),
+                    model: "".to_string(),
+                    inreac: "".to_string(),
+                    exreac: "".to_string(),
+                    mby: 0.0,
+                    mpy: 0.0,
+                    scen: 0,
+                    mis: vec![]
+                    };
     let mut old_set_id = 0;
     let mut first = true;
     let mut counter = 0;
@@ -250,10 +301,20 @@ fn getcis(q: Query) -> Json<QueryResult> {
         col_counter = col_counter + 1;
         let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
             my::from_row::<(String, String, String, String, f64, f64, u32, u32, u32)>(row.unwrap());
-        let key = format!(
-            "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
-            organism, model, inreac, exreac, mby, mpy, scen
-        );
+        //         let key = format!(
+        //             "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
+        //             organism, model, inreac, exreac, mby, mpy, scen
+        //         );
+        let mut key = ResponseRoW {
+            organism: organism,
+            model: model,
+            inreac: inreac,
+            exreac: exreac,
+            mby: mby,
+            mpy: mpy,
+            scen: scen,
+            mis: vec![],
+        };
 
         if old_key != key || old_set_id != s {
             if counter == ROWSPERSITE {
@@ -265,29 +326,36 @@ fn getcis(q: Query) -> Json<QueryResult> {
                 first = false;
                 old_key = key;
                 old_set_id = s;
-                let string = create_reaction_string(&conn, r);
-                mis.push_str(&string);
+                //                 let string = create_reaction_string(&conn, r);
+                let intervention = create_intervention(&conn, r);
+                mis.push(intervention);
             } else {
-                res.push(format!("{}<td>{}</td>", old_key, &mis));
+                old_key.mis = mis;
+                rows.push(old_key);
+                //                 res.push(format!("{}<td>{}</td>", old_key, &mis));
                 old_key = key;
                 old_set_id = s;
-                mis = "".to_string();
-                let string = create_reaction_string(&conn, r);
-                mis.push_str(&string);
+                mis = vec![];
+                //                 let string = create_reaction_string(&conn, r);
+                let intervention = create_intervention(&conn, r);
+                mis.push(intervention);
             }
         } else {
-            let string = create_reaction_string(&conn, r);
-            mis.push_str(&string);
+            //             let string = create_reaction_string(&conn, r);
+            //             mis.push_str(&string);
+            let intervention = create_intervention(&conn, r);
+            mis.push(intervention);
         }
     }
-    res.push(format!("{}<td>{}</td>", old_key, &mis));
 
-    let view = QueryResult {
-        col_offset: col_counter,
-        mis_offset: 1,
-        end_mis: counter,
+    old_key.mis = mis;
+    rows.push(old_key);
+    //     res.push(format!("{}<td>{}</td>", old_key, &mis));
+
+    let view = QueryResponse {
+        col_offset: q.col_offset + col_counter,
         max_mis: max_mis,
-        mis: res,
+        rows: rows,
     };
 
     //     println!("view: {:?}",view);
@@ -305,7 +373,7 @@ fn getcsv(q: Query) -> Stream<Cursor<String>> {
         return Stream::from(Cursor::new(stream));
     }
 
-    let mut sql = create_query(&conn, q);
+    let mut sql = create_query(&conn, &q);
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
         sql
@@ -376,87 +444,87 @@ struct MoreQuery {
     max_mis: u32,
 }
 
-#[get("/getcism?<q>")]
-fn getmorecis(q: MoreQuery) -> Json<QueryResult> {
-    let conn = establish_connection();
+// #[get("/getcism?<q>")]
+// fn getmorecis(q: MoreQuery) -> Json<QueryResponse> {
+//     let conn = establish_connection();
+//
+//     let qs = Query {
+//         organism: q.organism,
+//         model: q.model,
+//         inreac: q.inreac,
+//         exreac: q.exreac,
+//         mby: q.mby,
+//         mpy: q.mpy,
+//         scen: q.scen,
+//         mustin: q.mustin,
+//         forbidden: q.forbidden,
+//     };
+//     let mut sql = create_query(&conn, qs);
+//     sql = format!(
+//         "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
+//         sql
+//     );
+//     let limit = MAX_IS_SIZE * ROWSPERSITE;
+//     sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, q.col_offset));
+//     let mut stmt = conn.prepare(&sql).unwrap();
+//
+//     let mut res = vec![];
+//     let mut mis = "".to_string();
+//     let mut old_key = "".to_string();
+//     let mut old_set_id = 0;
+//     let mut first = true;
+//     let mut counter = 0;
+//
+//     let mut col_counter = 0;
+//     for row in stmt.execute(()).unwrap() {
+//         if counter > ROWSPERSITE {
+//             break;
+//         }
+//         col_counter = col_counter + 1;
+//         let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
+//             my::from_row::<(String, String, String, String, f64, f64, u32, u32, u32)>(row.unwrap());
+//         let key = format!(
+//             "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
+//             organism, model, inreac, exreac, mby, mpy, scen
+//         );
+//         if old_key != key || old_set_id != s {
+//             if counter == ROWSPERSITE {
+//                 col_counter = col_counter - 1;
+//                 break;
+//             }
+//             counter = counter + 1;
+//             if first {
+//                 first = false;
+//                 old_key = key.clone();
+//                 old_set_id = s;
+//                 let string = create_reaction_string(&conn, r);
+//                 mis.push_str(&string);
+//             } else {
+//                 res.push(old_key.clone() + "<td>" + &mis + "</td>");
+//                 old_key = key.clone();
+//                 old_set_id = s;
+//                 mis = "".to_string();
+//                 let string = create_reaction_string(&conn, r);
+//                 mis.push_str(&string);
+//             }
+//         } else {
+//             let string = create_reaction_string(&conn, r);
+//             mis.push_str(&string);
+//         }
+//     }
+//     res.push(old_key.clone() + "<td>" + &mis + "</td>");
+//
+//     let view = QueryResponse {
+//         col_offset: q.col_offset + col_counter,
+//         mis_offset: q.mis_offset + 1,
+//         end_mis: q.mis_offset + counter,
+//         max_mis: q.max_mis,
+//         mis: res,
+//     };
+//     Json(view)
+// }
 
-    let qs = Query {
-        organism: q.organism,
-        model: q.model,
-        inreac: q.inreac,
-        exreac: q.exreac,
-        mby: q.mby,
-        mpy: q.mpy,
-        scen: q.scen,
-        mustin: q.mustin,
-        forbidden: q.forbidden,
-    };
-    let mut sql = create_query(&conn, qs);
-    sql = format!(
-        "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
-        sql
-    );
-    let limit = MAX_IS_SIZE * ROWSPERSITE;
-    sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, q.col_offset));
-    let mut stmt = conn.prepare(&sql).unwrap();
-
-    let mut res = vec![];
-    let mut mis = "".to_string();
-    let mut old_key = "".to_string();
-    let mut old_set_id = 0;
-    let mut first = true;
-    let mut counter = 0;
-
-    let mut col_counter = 0;
-    for row in stmt.execute(()).unwrap() {
-        if counter > ROWSPERSITE {
-            break;
-        }
-        col_counter = col_counter + 1;
-        let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
-            my::from_row::<(String, String, String, String, f64, f64, u32, u32, u32)>(row.unwrap());
-        let key = format!(
-            "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>",
-            organism, model, inreac, exreac, mby, mpy, scen
-        );
-        if old_key != key || old_set_id != s {
-            if counter == ROWSPERSITE {
-                col_counter = col_counter - 1;
-                break;
-            }
-            counter = counter + 1;
-            if first {
-                first = false;
-                old_key = key.clone();
-                old_set_id = s;
-                let string = create_reaction_string(&conn, r);
-                mis.push_str(&string);
-            } else {
-                res.push(old_key.clone() + "<td>" + &mis + "</td>");
-                old_key = key.clone();
-                old_set_id = s;
-                mis = "".to_string();
-                let string = create_reaction_string(&conn, r);
-                mis.push_str(&string);
-            }
-        } else {
-            let string = create_reaction_string(&conn, r);
-            mis.push_str(&string);
-        }
-    }
-    res.push(old_key.clone() + "<td>" + &mis + "</td>");
-
-    let view = QueryResult {
-        col_offset: q.col_offset + col_counter,
-        mis_offset: q.mis_offset + 1,
-        end_mis: q.mis_offset + counter,
-        max_mis: q.max_mis,
-        mis: res,
-    };
-    Json(view)
-}
-
-fn create_query(conn: &my::Pool, q: Query) -> String {
+fn create_query(conn: &my::Pool, q: &Query) -> String {
     let mut sql = "SELECT * FROM mis WHERE 1".to_string();
     if q.organism != "None" {
         sql.push_str(" AND organism='");
@@ -527,9 +595,10 @@ fn not_found(req: &rocket::request::Request) -> String {
 fn rocket() -> rocket::Rocket {
     rocket::ignite()
         .mount("/", routes![mecis])
+        .mount("/", routes![mecis_info])
         .mount("/", routes![getcis])
         .mount("/", routes![getcsv])
-        .mount("/", routes![getmorecis])
+//         .mount("/", routes![getmorecis])
         .mount("/", routes![mecis_logo])
         .attach(Template::fairing())
         .catch(errors![not_found])
