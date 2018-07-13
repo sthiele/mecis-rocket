@@ -65,6 +65,7 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
     }
 
     let mut mapping = vec![];
+    mapping.push(KnockOut{name:"Error".to_string(), link: None});
     for mecisid in mecisids {
         let mut name = "".to_string();
         let sql = format!("SELECT name FROM reactions WHERE mecisid={}", mecisid);
