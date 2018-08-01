@@ -1,5 +1,5 @@
 <!DOCTYPE HTML>
-<html><head><meta charset="UTF-8"><title>Main</title><style>html,head,body { padding:0; margin:0; }
+<html><head><meta charset="UTF-8"><title>KISSME - webservice</title><style>html,head,body { padding:0; margin:0; }
 body { font-family: calibri, helvetica, arial, sans-serif; }</style><script type="text/javascript">
 (function() {
 'use strict';
@@ -16796,63 +16796,6 @@ var _sthiele$mecis_rocket$Main$list2string = function (l) {
 				_sthiele$mecis_rocket$Main$list2string(_p0._1)));
 	}
 };
-var _sthiele$mecis_rocket$Main$getDlLink = function (model) {
-	return A2(
-		_elm_lang$core$Basics_ops['++'],
-		'/getcsv?organism=',
-		A2(
-			_elm_lang$core$Basics_ops['++'],
-			model.corganism,
-			A2(
-				_elm_lang$core$Basics_ops['++'],
-				'&model=',
-				A2(
-					_elm_lang$core$Basics_ops['++'],
-					model.cmodel,
-					A2(
-						_elm_lang$core$Basics_ops['++'],
-						'&inreac=',
-						A2(
-							_elm_lang$core$Basics_ops['++'],
-							model.cinreac,
-							A2(
-								_elm_lang$core$Basics_ops['++'],
-								'&exreac=',
-								A2(
-									_elm_lang$core$Basics_ops['++'],
-									model.cexreac,
-									A2(
-										_elm_lang$core$Basics_ops['++'],
-										'&mby=',
-										A2(
-											_elm_lang$core$Basics_ops['++'],
-											model.cmby,
-											A2(
-												_elm_lang$core$Basics_ops['++'],
-												'&mpy=',
-												A2(
-													_elm_lang$core$Basics_ops['++'],
-													model.cmpy,
-													A2(
-														_elm_lang$core$Basics_ops['++'],
-														'&scen=',
-														A2(
-															_elm_lang$core$Basics_ops['++'],
-															model.cscen,
-															A2(
-																_elm_lang$core$Basics_ops['++'],
-																'&mustin=',
-																A2(
-																	_elm_lang$core$Basics_ops['++'],
-																	_sthiele$mecis_rocket$Main$list2string(model.cmustins),
-																	A2(
-																		_elm_lang$core$Basics_ops['++'],
-																		'&forbidden=',
-																		A2(
-																			_elm_lang$core$Basics_ops['++'],
-																			_sthiele$mecis_rocket$Main$list2string(model.cforbiddens),
-																			'&col_offset=0'))))))))))))))))));
-};
 var _sthiele$mecis_rocket$Main$spsty = _elm_lang$html$Html_Attributes$style(
 	{
 		ctor: '::',
@@ -17180,6 +17123,67 @@ var _sthiele$mecis_rocket$Main$printtable = function (rows) {
 			},
 			_sthiele$mecis_rocket$Main$printrows(rows)));
 };
+var _sthiele$mecis_rocket$Main$server = 'http://www2.mpi-magdeburg.mpg.de/projects/mecis';
+var _sthiele$mecis_rocket$Main$getDlLink = function (model) {
+	return A2(
+		_elm_lang$core$Basics_ops['++'],
+		_sthiele$mecis_rocket$Main$server,
+		A2(
+			_elm_lang$core$Basics_ops['++'],
+			'/getcsv?organism=',
+			A2(
+				_elm_lang$core$Basics_ops['++'],
+				model.corganism,
+				A2(
+					_elm_lang$core$Basics_ops['++'],
+					'&model=',
+					A2(
+						_elm_lang$core$Basics_ops['++'],
+						model.cmodel,
+						A2(
+							_elm_lang$core$Basics_ops['++'],
+							'&inreac=',
+							A2(
+								_elm_lang$core$Basics_ops['++'],
+								model.cinreac,
+								A2(
+									_elm_lang$core$Basics_ops['++'],
+									'&exreac=',
+									A2(
+										_elm_lang$core$Basics_ops['++'],
+										model.cexreac,
+										A2(
+											_elm_lang$core$Basics_ops['++'],
+											'&mby=',
+											A2(
+												_elm_lang$core$Basics_ops['++'],
+												model.cmby,
+												A2(
+													_elm_lang$core$Basics_ops['++'],
+													'&mpy=',
+													A2(
+														_elm_lang$core$Basics_ops['++'],
+														model.cmpy,
+														A2(
+															_elm_lang$core$Basics_ops['++'],
+															'&scen=',
+															A2(
+																_elm_lang$core$Basics_ops['++'],
+																model.cscen,
+																A2(
+																	_elm_lang$core$Basics_ops['++'],
+																	'&mustin=',
+																	A2(
+																		_elm_lang$core$Basics_ops['++'],
+																		_sthiele$mecis_rocket$Main$list2string(model.cmustins),
+																		A2(
+																			_elm_lang$core$Basics_ops['++'],
+																			'&forbidden=',
+																			A2(
+																				_elm_lang$core$Basics_ops['++'],
+																				_sthiele$mecis_rocket$Main$list2string(model.cforbiddens),
+																				'&col_offset=0')))))))))))))))))));
+};
 var _sthiele$mecis_rocket$Main$message_area = function (model) {
 	var _p7 = model.cmessage;
 	if (_p7 === '') {
@@ -17499,62 +17503,65 @@ var _sthiele$mecis_rocket$Main$MoreData = function (a) {
 var _sthiele$mecis_rocket$Main$getMoreData = function (model) {
 	var url = A2(
 		_elm_lang$core$Basics_ops['++'],
-		'/getcis?organism=',
+		_sthiele$mecis_rocket$Main$server,
 		A2(
 			_elm_lang$core$Basics_ops['++'],
-			model.corganism,
+			'/getcis?organism=',
 			A2(
 				_elm_lang$core$Basics_ops['++'],
-				'&model=',
+				model.corganism,
 				A2(
 					_elm_lang$core$Basics_ops['++'],
-					model.cmodel,
+					'&model=',
 					A2(
 						_elm_lang$core$Basics_ops['++'],
-						'&inreac=',
+						model.cmodel,
 						A2(
 							_elm_lang$core$Basics_ops['++'],
-							model.cinreac,
+							'&inreac=',
 							A2(
 								_elm_lang$core$Basics_ops['++'],
-								'&exreac=',
+								model.cinreac,
 								A2(
 									_elm_lang$core$Basics_ops['++'],
-									model.cexreac,
+									'&exreac=',
 									A2(
 										_elm_lang$core$Basics_ops['++'],
-										'&mby=',
+										model.cexreac,
 										A2(
 											_elm_lang$core$Basics_ops['++'],
-											model.cmby,
+											'&mby=',
 											A2(
 												_elm_lang$core$Basics_ops['++'],
-												'&mpy=',
+												model.cmby,
 												A2(
 													_elm_lang$core$Basics_ops['++'],
-													model.cmpy,
+													'&mpy=',
 													A2(
 														_elm_lang$core$Basics_ops['++'],
-														'&scen=',
+														model.cmpy,
 														A2(
 															_elm_lang$core$Basics_ops['++'],
-															model.cscen,
+															'&scen=',
 															A2(
 																_elm_lang$core$Basics_ops['++'],
-																'&mustin=',
+																model.cscen,
 																A2(
 																	_elm_lang$core$Basics_ops['++'],
-																	_sthiele$mecis_rocket$Main$list2string(model.cmustins),
+																	'&mustin=',
 																	A2(
 																		_elm_lang$core$Basics_ops['++'],
-																		'&forbidden=',
+																		_sthiele$mecis_rocket$Main$list2string(model.cmustins),
 																		A2(
 																			_elm_lang$core$Basics_ops['++'],
-																			_sthiele$mecis_rocket$Main$list2string(model.cforbiddens),
+																			'&forbidden=',
 																			A2(
 																				_elm_lang$core$Basics_ops['++'],
-																				'&col_offset=',
-																				_elm_lang$core$Basics$toString(model.col_offset))))))))))))))))))));
+																				_sthiele$mecis_rocket$Main$list2string(model.cforbiddens),
+																				A2(
+																					_elm_lang$core$Basics_ops['++'],
+																					'&col_offset=',
+																					_elm_lang$core$Basics$toString(model.col_offset)))))))))))))))))))));
 	return A2(
 		_elm_lang$http$Http$send,
 		_sthiele$mecis_rocket$Main$MoreData,
@@ -17566,59 +17573,62 @@ var _sthiele$mecis_rocket$Main$NewData = function (a) {
 var _sthiele$mecis_rocket$Main$getData = function (model) {
 	var url = A2(
 		_elm_lang$core$Basics_ops['++'],
-		'/getcis?organism=',
+		_sthiele$mecis_rocket$Main$server,
 		A2(
 			_elm_lang$core$Basics_ops['++'],
-			model.corganism,
+			'/getcis?organism=',
 			A2(
 				_elm_lang$core$Basics_ops['++'],
-				'&model=',
+				model.corganism,
 				A2(
 					_elm_lang$core$Basics_ops['++'],
-					model.cmodel,
+					'&model=',
 					A2(
 						_elm_lang$core$Basics_ops['++'],
-						'&inreac=',
+						model.cmodel,
 						A2(
 							_elm_lang$core$Basics_ops['++'],
-							model.cinreac,
+							'&inreac=',
 							A2(
 								_elm_lang$core$Basics_ops['++'],
-								'&exreac=',
+								model.cinreac,
 								A2(
 									_elm_lang$core$Basics_ops['++'],
-									model.cexreac,
+									'&exreac=',
 									A2(
 										_elm_lang$core$Basics_ops['++'],
-										'&mby=',
+										model.cexreac,
 										A2(
 											_elm_lang$core$Basics_ops['++'],
-											model.cmby,
+											'&mby=',
 											A2(
 												_elm_lang$core$Basics_ops['++'],
-												'&mpy=',
+												model.cmby,
 												A2(
 													_elm_lang$core$Basics_ops['++'],
-													model.cmpy,
+													'&mpy=',
 													A2(
 														_elm_lang$core$Basics_ops['++'],
-														'&scen=',
+														model.cmpy,
 														A2(
 															_elm_lang$core$Basics_ops['++'],
-															model.cscen,
+															'&scen=',
 															A2(
 																_elm_lang$core$Basics_ops['++'],
-																'&mustin=',
+																model.cscen,
 																A2(
 																	_elm_lang$core$Basics_ops['++'],
-																	_sthiele$mecis_rocket$Main$list2string(model.cmustins),
+																	'&mustin=',
 																	A2(
 																		_elm_lang$core$Basics_ops['++'],
-																		'&forbidden=',
+																		_sthiele$mecis_rocket$Main$list2string(model.cmustins),
 																		A2(
 																			_elm_lang$core$Basics_ops['++'],
-																			_sthiele$mecis_rocket$Main$list2string(model.cforbiddens),
-																			'&col_offset=0'))))))))))))))))));
+																			'&forbidden=',
+																			A2(
+																				_elm_lang$core$Basics_ops['++'],
+																				_sthiele$mecis_rocket$Main$list2string(model.cforbiddens),
+																				'&col_offset=0')))))))))))))))))));
 	return A2(
 		_elm_lang$http$Http$send,
 		_sthiele$mecis_rocket$Main$NewData,
@@ -17919,7 +17929,7 @@ var _sthiele$mecis_rocket$Main$result_area = function (model) {
 				{ctor: '[]'},
 				{
 					ctor: '::',
-					_0: (_elm_lang$core$Native_Utils.cmp(len, 10000) > 0) ? A5(
+					_0: (_elm_lang$core$Native_Utils.cmp(model.max_mis, 10000) > 0) ? A5(
 						_debois$elm_mdl$Material_Button$render,
 						_sthiele$mecis_rocket$Main$Mdl,
 						{
@@ -18991,7 +19001,7 @@ var _sthiele$mecis_rocket$Main$Init = function (a) {
 	return {ctor: 'Init', _0: a};
 };
 var _sthiele$mecis_rocket$Main$getMecisInfo = function () {
-	var url = 'http://localhost:8000/mecisinfo';
+	var url = A2(_elm_lang$core$Basics_ops['++'], _sthiele$mecis_rocket$Main$server, '/mecisinfo');
 	return A2(
 		_elm_lang$http$Http$send,
 		_sthiele$mecis_rocket$Main$Init,

@@ -357,6 +357,8 @@ message_area model =
     string -> span [style [("padding-left","2em")]] [ b [] [text string] ]
 
 
+server = "http://www2.mpi-magdeburg.mpg.de/projects/mecis"    
+    
 result_area : Model -> Html Msg
 result_area model = 
     let len = List.length model.rows
@@ -368,7 +370,7 @@ result_area model =
         then div [fstyle] [ p []
                               [
 --                               b [spsty] [text ((toString model.max_mis)++" intervention sets found!")],
-                                if len > 10000
+                                if model.max_mis > 10000
                                 then                                
                                     Button.render Mdl [9, 0, 0, 1] model.mdl
                                     [ Button.ripple
@@ -612,7 +614,7 @@ type alias Response1 =
 
 getDlLink : Model -> String
 getDlLink model =
-  "/getcsv?organism="++model.corganism
+  server++"/getcsv?organism="++model.corganism
         ++"&model="++model.cmodel
         ++"&inreac="++model.cinreac
         ++"&exreac="++model.cexreac
@@ -626,7 +628,7 @@ getDlLink model =
 getData : Model -> Cmd Msg
 getData model =
   let
-    url ="/getcis?organism="++model.corganism
+    url =server++"/getcis?organism="++model.corganism
         ++"&model="++model.cmodel
         ++"&inreac="++model.cinreac
         ++"&exreac="++model.cexreac
@@ -642,7 +644,7 @@ getData model =
 getMoreData : Model -> Cmd Msg
 getMoreData model =
   let
-    url ="/getcis?organism="++model.corganism
+    url =server++"/getcis?organism="++model.corganism
         ++"&model="++model.cmodel
         ++"&inreac="++model.cinreac
         ++"&exreac="++model.cexreac
@@ -697,7 +699,7 @@ decodeKnockOut =
 getMecisInfo :  Cmd Msg
 getMecisInfo =
   let
-    url ="http://localhost:8000/mecisinfo"
+    url = server++"/mecisinfo"
   in
     Http.send Init (Http.get url decodeMecisInfo)      
     
