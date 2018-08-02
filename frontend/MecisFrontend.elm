@@ -331,7 +331,7 @@ aboutTab = div [fstyle] [ text ("This is the KISS ME - web service.") ]
 mheader : Html Msg
 mheader = header []
     [ h1 [hstyle] 
-         [ img [ src (server++"mecis_logo"),
+         [ img [ src (server++"/mecis_logo"),
                  alt "Logo" 
                ] [ ],
            span [style[("padding-left","2em")]] [text ("KISS ME - web service")]
