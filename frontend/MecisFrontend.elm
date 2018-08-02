@@ -334,7 +334,7 @@ mheader = header []
          [ img [ src (server++"mecis_logo"),
                  alt "Logo" 
                ] [ ],
-           span [style[("padding-left","2em")]] [text ("MECIS - web service")]
+           span [style[("padding-left","2em")]] [text ("KISS ME - web service")]
          ] 
     ]
                     
