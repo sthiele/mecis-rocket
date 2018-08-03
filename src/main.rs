@@ -429,7 +429,7 @@ fn create_query(conn: &my::Pool, q: &Query) -> String {
     outer_sql
 }
 
-#[error(404)]
+#[catch(404)]
 fn not_found(req: &rocket::request::Request) -> String {
     format!("Not found.\n Request {}", req)
 }
@@ -456,7 +456,7 @@ fn rocket() -> rocket::Rocket {
         .mount("/", routes![getcis])
         .mount("/", routes![getcsv])
         .mount("/", routes![mecis_logo])
-        .catch(errors![not_found])
+        .catch(catchers![not_found])
 }
 
 fn main() {
