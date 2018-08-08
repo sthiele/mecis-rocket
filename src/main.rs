@@ -33,6 +33,12 @@ fn mecis_logo() -> NamedFile {
     NamedFile::open("frontend/mecis-logo.png").unwrap()
 }
 
+#[get("/favicon.ico")]
+fn favicon() -> NamedFile {
+    NamedFile::open("frontend/favicon.ico").unwrap()
+}
+
+
 #[derive(Serialize, Clone)]
 struct MecisInfo {
     organisms: Vec<String>,
@@ -456,6 +462,7 @@ fn rocket() -> rocket::Rocket {
         .mount("/", routes![getcis])
         .mount("/", routes![getcsv])
         .mount("/", routes![mecis_logo])
+        .mount("/", routes![favicon])
         .catch(catchers![not_found])
 }
 
