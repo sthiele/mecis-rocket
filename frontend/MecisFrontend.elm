@@ -481,7 +481,7 @@ myform m =
                              )
                          )
                         ),
-              label [spsty] [text ("Substrate excretion reaction:")],
+              label [spsty] [text ("Product excretion reaction:")],
               select [onInput ChangeExreac, value m.cexreac] ((option [value "None"] [text "undefined"])
                          ::
                          (ctx.exreacs |> List.map (\string ->
