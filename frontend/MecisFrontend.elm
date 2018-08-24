@@ -342,14 +342,14 @@ footer = Footer.mini []
     { left =
         Footer.left []
             [ Footer.links []
-                [ Footer.linkItem [ Footer.href "www.mpi-magdeburg.mpg.de" ] [ Footer.html <| text "mpi-magdeburg"]
+                [ Footer.linkItem [ Footer.href "http://www.mpi-magdeburg.mpg.de" ] [ Footer.html <| text "mpi-magdeburg"]
                 ]
             ]
 
     , right =
         Footer.right [] []
     }                    
-    
+
 message_area : Model -> Html Msg
 message_area model = 
    case model.cmessage of
