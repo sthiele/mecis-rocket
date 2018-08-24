@@ -165,9 +165,9 @@ struct Query {
 }
 
 fn countcis(conn: &my::Pool, q: Query) -> u32 {
-    let mut sql = create_count_query(&conn, &q);
+    let mut sql = create_query(&conn, &q);
     sql = format!("SELECT  COUNT(*) FROM ({}) AS TY", sql);
-    println!("SQL: {}", sql);
+//     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(sql).unwrap();
 
     for row in stmt.execute(()).unwrap() {
@@ -225,7 +225,7 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, set_id FROM ({} LIMIT {} OFFSET {}) AS TY",
         sql, ROWSPERSITE, q.col_offset
     );
-    println!("SQL: {}", sql);
+//     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
     let tmp = stmt.execute(()).unwrap();
 
@@ -233,7 +233,7 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
         let (organism, model, inreac, exreac, mby, mpy, scen, set_id) =
             my::from_row::<(String, String, String, String, f64, f64, u32, u32)>(row.unwrap());
         sql = format!("SELECT r FROM interventionsets WHERE set_id='{}'", set_id);
-        println!("SQL: {}", sql);
+//         println!("SQL: {}", sql);
         let mut stmt = conn.prepare(&sql).unwrap();
         let tmp2 = stmt.execute(()).unwrap();
         let mut mis = vec![];
@@ -281,7 +281,7 @@ fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<S
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, set_id FROM ({} LIMIT {} ) AS TY",
         sql, ROWSPERFILE
     );
-    println!("SQL: {}", sql);
+//     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
 
     let tmp = stmt.execute(()).unwrap();
@@ -290,7 +290,7 @@ fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<S
         let (organism, model, inreac, exreac, mby, mpy, scen, set_id) =
             my::from_row::<(String, String, String, String, f64, f64, u32, u32)>(row.unwrap());
         sql = format!("SELECT r FROM interventionsets WHERE set_id='{}'", set_id);
-        println!("SQL: {}", sql);
+//         println!("SQL: {}", sql);
         let mut stmt = conn.prepare(&sql).unwrap();
         let tmp2 = stmt.execute(()).unwrap();
         let mut mis = "".to_string();
@@ -309,71 +309,6 @@ fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<S
     Stream::from(Cursor::new(stream))
 }
 
-fn create_count_query(conn: &my::Pool, q: &Query) -> String {
-    let mut sql = "SELECT mis_short.set_id FROM mis_short WHERE 1".to_string();
-    if q.organism != "None" {
-        sql.push_str(" AND organism='");
-        sql.push_str(&q.organism);
-        sql.push('\'');
-    }
-    if q.model != "None" {
-        sql.push_str(" AND model='");
-        sql.push_str(&q.model);
-        sql.push('\'');
-    }
-    if q.inreac != "None" {
-        sql.push_str(" AND inreac='");
-        sql.push_str(&q.inreac);
-        sql.push('\'');
-    }
-    if q.exreac != "None" {
-        sql.push_str(" AND exreac='");
-        sql.push_str(&q.exreac);
-        sql.push('\'');
-    }
-    if !q.mby.is_nan() {
-        sql.push_str(" AND mby='");
-        sql.push_str(&format!("{}", q.mby));
-        sql.push('\'');
-    }
-    if !q.mpy.is_nan() {
-        sql.push_str(" AND mpy='");
-        sql.push_str(&format!("{}", q.mpy));
-        sql.push('\'');
-    }
-    sql.push_str(" AND scen='");
-    sql.push_str(&format!("{}", q.scen));
-    sql.push('\'');
-
-    let mut outer_sql = sql;
-
-    let mut mustin = q.mustin.split_whitespace();
-    let mut forbidden = q.forbidden.split_whitespace();
-    let mut counter = 1;
-
-    while let Some(r) = mustin.next() {
-        if let Some(mecisid) = name2id(conn, r) {
-            let r_sql = format!("SELECT set_id FROM interventionsets WHERE r ='{}'", mecisid);
-            outer_sql = format!(
-            "SELECT T{c1}.set_id FROM ({left}) as T{c1} JOIN ({right}) as T{c2} on T{c1}.set_id=T{c2}.set_id", left=outer_sql, right=r_sql, c1=counter,c2=counter+1);
-
-            counter = counter + 2;
-        } else {
-            outer_sql = format!("{} AND 1=0", outer_sql);
-        }
-    }
-
-    while let Some(r) = forbidden.next() {
-        if let Some(mecisid) = name2id(conn, r) {
-            let r_sql = format!("SELECT set_id FROM interventionsets WHERE r ='{}'", mecisid);
-            outer_sql = format!(
-            "SELECT T{c1}.set_id FROM ({left}) as T{c1} LEFT JOIN ({right}) as T{c2} on T{c1}.set_id=T{c2}.set_id WHERE T{c2}.set_id IS NULL",left=outer_sql, right=r_sql, c1=counter,c2=counter+1);
-            counter = counter + 2;
-        }
-    }
-
-    outer_sql
-}
 fn create_query(conn: &my::Pool, q: &Query) -> String {
     let mut sql = "SELECT mis_short.organism, mis_short.model, mis_short.inreac, mis_short.exreac, mis_short.mby, mis_short.mpy, mis_short.scen, mis_short.set_id FROM mis_short WHERE 1".to_string();
     if q.organism != "None" {
