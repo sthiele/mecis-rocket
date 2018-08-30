@@ -18,7 +18,6 @@ use std::cmp::Ordering;
 use std::env;
 use std::io::Cursor;
 
-const MAX_IS_SIZE: u32 = 20;
 const ROWSPERSITE: u32 = 50;
 const ROWSPERFILE: u32 = 10000;
 
@@ -37,7 +36,6 @@ fn mecis_logo() -> NamedFile {
 fn favicon() -> NamedFile {
     NamedFile::open("frontend/favicon.ico").unwrap()
 }
-
 
 #[derive(Serialize, Clone)]
 struct MecisInfo {
@@ -71,7 +69,10 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
     }
 
     let mut mapping = vec![];
-    mapping.push(KnockOut{name:"Error".to_string(), link: None});
+    mapping.push(KnockOut {
+        name: "Error".to_string(),
+        link: None,
+    });
     for mecisid in mecisids {
         let mut name = "".to_string();
         let sql = format!("SELECT name FROM reactions WHERE mecisid={}", mecisid);
@@ -165,8 +166,8 @@ struct Query {
 
 fn countcis(conn: &my::Pool, q: Query) -> u32 {
     let mut sql = create_query(&conn, &q);
-    sql = format!("SELECT  COUNT(*) FROM (SELECT DISTINCT organism,model,inreac,exreac,mby,mpy,scen, s FROM ({}) AS TX) AS TY", sql);
-    println!("SQL: {}", sql);
+    sql = format!("SELECT  COUNT(*) FROM ({}) AS TY", sql);
+//     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(sql).unwrap();
 
     for row in stmt.execute(()).unwrap() {
@@ -201,6 +202,8 @@ struct QueryResponse {
 
 #[get("/getcis?<q>")]
 fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryResponse> {
+    let mut rows = vec![];
+    let mut col_counter = 0;
     let mapping = &st.mapping;
     let max_mis;
     if q.col_offset == 0 {
@@ -209,7 +212,7 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
             let view = QueryResponse {
                 col_offset: 0,
                 max_mis: 0,
-                rows: vec![],
+                rows: rows,
             };
             return Json(view);
         }
@@ -219,41 +222,27 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
 
     let mut sql = create_query(&conn, &q);
     sql = format!(
-        "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
-        sql
+        "SELECT organism, model, inreac, exreac, mby, mpy, scen, set_id FROM ({} LIMIT {} OFFSET {}) AS TY",
+        sql, ROWSPERSITE, q.col_offset
     );
-    let limit = MAX_IS_SIZE * ROWSPERSITE;
-    sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, q.col_offset));
-    println!("SQL: {}", sql);
+//     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
-
-    let mut rows = vec![];
-    let mut mis = vec![];
-    let mut old_key = ResponseRoW {
-        organism: "".to_string(),
-        model: "".to_string(),
-        inreac: "".to_string(),
-        exreac: "".to_string(),
-        mby: 0.0,
-        mpy: 0.0,
-        scen: 0,
-        mis: vec![],
-    };
-    let mut old_set_id = 0;
-    let mut first = true;
-    let mut counter = 0;
-    let mut col_counter = 0;
     let tmp = stmt.execute(()).unwrap();
+
     for row in tmp {
-        if counter > ROWSPERSITE {
-            break;
+        let (organism, model, inreac, exreac, mby, mpy, scen, set_id) =
+            my::from_row::<(String, String, String, String, f64, f64, u32, u32)>(row.unwrap());
+        sql = format!("SELECT r FROM interventionsets WHERE set_id='{}'", set_id);
+//         println!("SQL: {}", sql);
+        let mut stmt = conn.prepare(&sql).unwrap();
+        let tmp2 = stmt.execute(()).unwrap();
+        let mut mis = vec![];
+        for row2 in tmp2 {
+            let r = my::from_row::<usize>(row2.unwrap());
+            let ko = &mapping[r];
+            mis.push(ko.clone());
         }
-        col_counter = col_counter + 1;
-        let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
-            my::from_row::<(String, String, String, String, f64, f64, u32, u32, usize)>(
-                row.unwrap(),
-            );
-        let mut key = ResponseRoW {
+        let response = ResponseRoW {
             organism: organism,
             model: model,
             inreac: inreac,
@@ -261,38 +250,11 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
             mby: mby,
             mpy: mpy,
             scen: scen,
-            mis: vec![],
+            mis: mis,
         };
-
-        if old_key != key || old_set_id != s {
-            if counter == ROWSPERSITE {
-                col_counter = col_counter - 1;
-                break;
-            }
-            counter = counter + 1;
-            if first {
-                first = false;
-                old_key = key;
-                old_set_id = s;
-                let ko = &mapping[r];
-                mis.push(ko.clone());
-            } else {
-                old_key.mis = mis;
-                rows.push(old_key);
-                old_key = key;
-                old_set_id = s;
-                mis = vec![];
-                let ko = &mapping[r];
-                mis.push(ko.clone());
-            }
-        } else {
-            let ko = &mapping[r];
-            mis.push(ko.clone());
-        }
+        col_counter = col_counter + 1;
+        rows.push(response.clone());
     }
-
-    old_key.mis = mis;
-    rows.push(old_key);
 
     let view = QueryResponse {
         col_offset: q.col_offset + col_counter,
@@ -306,10 +268,9 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
 
 #[get("/getcsv?<q>")]
 fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<String>> {
+    let mut stream = "".to_string();
     let mapping = &st.mapping;
     let max_mis = countcis(&conn, q.clone());
-
-    let mut stream = "".to_string();
 
     if max_mis == 0 {
         return Stream::from(Cursor::new(stream));
@@ -317,63 +278,39 @@ fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<S
 
     let mut sql = create_query(&conn, &q);
     sql = format!(
-        "SELECT organism, model, inreac, exreac, mby, mpy, scen, s, r FROM ({}) AS TY",
-        sql
+        "SELECT organism, model, inreac, exreac, mby, mpy, scen, set_id FROM ({} LIMIT {} ) AS TY",
+        sql, ROWSPERFILE
     );
-    let limit = MAX_IS_SIZE * ROWSPERFILE;
-    sql.push_str(&format!(" LIMIT {}", limit));
-    println!("SQL: {}", sql);
+//     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
 
-    let mut mis = "".to_string();
-    let mut old_key = "".to_string();
-    let mut old_set_id = 0;
-    let mut first = true;
-    let mut counter = 0;
     let tmp = stmt.execute(()).unwrap();
-    for row in tmp {
-        if counter > ROWSPERFILE {
-            break;
-        }
-        let (organism, model, inreac, exreac, mby, mpy, scen, s, r) =
-            my::from_row::<(String, String, String, String, f64, f64, u32, u32, usize)>(
-                row.unwrap(),
-            );
-        let key = format!(
-            "{},{},{},{},{},{},{}",
-            organism, model, inreac, exreac, mby, mpy, scen
-        );
 
-        if old_key != key || old_set_id != s {
-            if counter == ROWSPERFILE {
-                break;
-            }
-            counter = counter + 1;
-            if first {
-                first = false;
-                old_key = key;
-                old_set_id = s;
-                let ko = &mapping[r];
-                mis.push_str(&format!("{} ", ko.name));
-            } else {
-                stream.push_str(&format!("{},{}\n", old_key, &mis));
-                old_key = key;
-                old_set_id = s;
-                mis = "".to_string();
-                let ko = &mapping[r];
-                mis.push_str(&format!("{} ", ko.name));
-            }
-        } else {
+    for row in tmp {
+        let (organism, model, inreac, exreac, mby, mpy, scen, set_id) =
+            my::from_row::<(String, String, String, String, f64, f64, u32, u32)>(row.unwrap());
+        sql = format!("SELECT r FROM interventionsets WHERE set_id='{}'", set_id);
+//         println!("SQL: {}", sql);
+        let mut stmt = conn.prepare(&sql).unwrap();
+        let tmp2 = stmt.execute(()).unwrap();
+        let mut mis = "".to_string();
+        for row2 in tmp2 {
+            let r = my::from_row::<usize>(row2.unwrap());
             let ko = &mapping[r];
             mis.push_str(&format!("{} ", ko.name));
         }
+
+        stream.push_str(&format!(
+            "{},{},{},{},{},{},{},{}\n",
+            organism, model, inreac, exreac, mby, mpy, scen, &mis
+        ));
     }
-    stream.push_str(&format!("{},{}\n", old_key, &mis));
+
     Stream::from(Cursor::new(stream))
 }
 
 fn create_query(conn: &my::Pool, q: &Query) -> String {
-    let mut sql = "SELECT * FROM mis WHERE 1".to_string();
+    let mut sql = "SELECT mis_short.organism, mis_short.model, mis_short.inreac, mis_short.exreac, mis_short.mby, mis_short.mpy, mis_short.scen, mis_short.set_id FROM mis_short WHERE 1".to_string();
     if q.organism != "None" {
         sql.push_str(" AND organism='");
         sql.push_str(&q.organism);
@@ -408,7 +345,7 @@ fn create_query(conn: &my::Pool, q: &Query) -> String {
     sql.push_str(&format!("{}", q.scen));
     sql.push('\'');
 
-    let mut outer_sql = format!("SELECT * FROM ({}) AS T0 WHERE 1", sql);
+    let mut outer_sql = sql;
 
     let mut mustin = q.mustin.split_whitespace();
     let mut forbidden = q.forbidden.split_whitespace();
@@ -416,9 +353,11 @@ fn create_query(conn: &my::Pool, q: &Query) -> String {
 
     while let Some(r) = mustin.next() {
         if let Some(mecisid) = name2id(conn, r) {
+            let r_sql = format!("SELECT set_id FROM interventionsets WHERE r ='{}'", mecisid);
             outer_sql = format!(
-            "{} AND EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
-            counter = counter + 1;
+            "SELECT T{c1}.organism, T{c1}.model, T{c1}.inreac, T{c1}.exreac, T{c1}.mby, T{c1}.mpy, T{c1}.scen, T{c1}.set_id FROM ({left}) as T{c1} JOIN ({right}) as T{c2} on T{c1}.set_id=T{c2}.set_id", left=outer_sql, right=r_sql, c1=counter,c2=counter+1);
+
+            counter = counter + 2;
         } else {
             outer_sql = format!("{} AND 1=0", outer_sql);
         }
@@ -426,15 +365,15 @@ fn create_query(conn: &my::Pool, q: &Query) -> String {
 
     while let Some(r) = forbidden.next() {
         if let Some(mecisid) = name2id(conn, r) {
+            let r_sql = format!("SELECT set_id FROM interventionsets WHERE r ='{}'", mecisid);
             outer_sql = format!(
-            "{} AND NOT EXISTS (SELECT r FROM ({}) AS T{} WHERE r ='{}' AND model=T0.model AND inreac=T0.inreac AND exreac=T0.exreac AND mby=T0.mby AND mpy=T0.mpy AND scen=T0.scen AND s=T0.s)", outer_sql, sql,counter, mecisid);
-            counter = counter + 1;
+            "SELECT T{c1}.organism, T{c1}.model, T{c1}.inreac, T{c1}.exreac, T{c1}.mby, T{c1}.mpy, T{c1}.scen, T{c1}.set_id FROM ({left}) as T{c1} LEFT JOIN ({right}) as T{c2} on T{c1}.set_id=T{c2}.set_id WHERE T{c2}.set_id IS NULL",left=outer_sql, right=r_sql, c1=counter,c2=counter+1);
+            counter = counter + 2;
         }
     }
 
     outer_sql
 }
-
 #[catch(404)]
 fn not_found(req: &rocket::request::Request) -> String {
     format!("Not found.\n Request {}", req)
@@ -471,52 +410,60 @@ fn main() {
 }
 
 fn info(conn: &my::Pool) -> MecisInfo {
-    let mut stmt = conn.prepare("SELECT DISTINCT organism FROM mis").unwrap();
-    let v_orgs = stmt.execute(())
+    let mut stmt = conn.prepare("SELECT name FROM organisms").unwrap();
+    let v_orgs = stmt
+        .execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT model FROM mis").unwrap();
-    let v_models = stmt.execute(())
+    let mut stmt = conn.prepare("SELECT name FROM models").unwrap();
+    let v_models = stmt
+        .execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT inreac FROM mis").unwrap();
-    let v_inreacs = stmt.execute(())
+    let mut stmt = conn.prepare("SELECT name FROM inreacs").unwrap();
+    let v_inreacs = stmt
+        .execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT exreac FROM mis").unwrap();
-    let v_exreacs = stmt.execute(())
+    let mut stmt = conn.prepare("SELECT name FROM exreacs").unwrap();
+    let v_exreacs = stmt
+        .execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT mby FROM mis").unwrap();
-    let mut v_mbys: Vec<f64> = stmt.execute(())
+    let mut stmt = conn.prepare("SELECT DISTINCT mby FROM mis_short").unwrap();
+    let mut v_mbys: Vec<f64> = stmt
+        .execute(())
         .unwrap()
         .map(|row| my::from_row::<f64>(row.unwrap()))
         .collect();
     v_mbys.sort_by(|a, b| mcmp(a, b));
 
-    let mut stmt = conn.prepare("SELECT DISTINCT mpy FROM mis").unwrap();
-    let mut v_mpys: Vec<f64> = stmt.execute(())
+    let mut stmt = conn.prepare("SELECT DISTINCT mpy FROM mis_short").unwrap();
+    let mut v_mpys: Vec<f64> = stmt
+        .execute(())
         .unwrap()
         .map(|row| my::from_row::<f64>(row.unwrap()))
         .collect();
     v_mpys.sort_by(|a, b| mcmp(a, b));
 
-    let mut stmt = conn.prepare("SELECT DISTINCT scen FROM mis").unwrap();
-    let v_scens = stmt.execute(())
+    let mut stmt = conn.prepare("SELECT DISTINCT scen FROM mis_short").unwrap();
+    let v_scens = stmt
+        .execute(())
         .unwrap()
         .map(|row| my::from_row::<u32>(row.unwrap()))
         .collect();
 
     let mut stmt = conn.prepare("SELECT name FROM reactions").unwrap();
-    let v_reactions = stmt.execute(())
+    let v_reactions = stmt
+        .execute(())
         .unwrap()
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
