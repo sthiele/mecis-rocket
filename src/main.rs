@@ -45,7 +45,7 @@ struct MecisInfo {
     exreacs: Vec<String>,
     reactions: Vec<String>,
     mbys: Vec<f64>,
-    mpys: Vec<f64>,
+    //     mpys: Vec<f64>,
     scens: Vec<u32>,
 }
 
@@ -61,7 +61,7 @@ fn mecis_info(state: State<MState>) -> Json<MecisInfo> {
 
 fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
     let mut mecisids = vec![];
-    let sql = format!("SELECT mecisid FROM reactions");
+    let sql = format!("SELECT id FROM reactions");
     let mut stmt = conn.prepare(sql).unwrap();
     for row in stmt.execute(()).unwrap() {
         let mecisid = my::from_row::<u32>(row.unwrap());
@@ -75,14 +75,14 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
     });
     for mecisid in mecisids {
         let mut name = "".to_string();
-        let sql = format!("SELECT name FROM reactions WHERE mecisid={}", mecisid);
+        let sql = format!("SELECT name FROM reactions WHERE id={}", mecisid);
         let mut stmt = conn.prepare(sql).unwrap();
         for row in stmt.execute(()).unwrap() {
             name = my::from_row::<String>(row.unwrap());
         }
 
         let mut keggid = None;
-        let sql = format!("SELECT keggid FROM reactions WHERE mecisid={}", mecisid);
+        let sql = format!("SELECT keggid FROM reactions WHERE id={}", mecisid);
         let mut stmt = conn.prepare(sql).unwrap();
         for row in stmt.execute(()).unwrap() {
             if let Ok(id) = my::from_row_opt::<String>(row.unwrap()) {
@@ -101,7 +101,7 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
             });
         } else {
             let mut biggid = None;
-            let sql = format!("SELECT biggid FROM reactions WHERE mecisid={}", mecisid);
+            let sql = format!("SELECT biggid FROM reactions WHERE id={}", mecisid);
             let mut stmt = conn.prepare(sql).unwrap();
             for row in stmt.execute(()).unwrap() {
                 if let Ok(id) = my::from_row_opt::<String>(row.unwrap()) {
@@ -157,7 +157,7 @@ struct Query {
     inreac: String,
     exreac: String,
     mby: f64,
-    mpy: f64,
+    proj: u32,
     scen: u32,
     mustin: String,
     forbidden: String,
@@ -167,7 +167,7 @@ struct Query {
 fn countcis(conn: &my::Pool, q: Query) -> u32 {
     let mut sql = create_query(&conn, &q);
     sql = format!("SELECT  COUNT(*) FROM ({}) AS TY", sql);
-//     println!("SQL: {}", sql);
+    println!("SQL: {}", sql);
     let mut stmt = conn.prepare(sql).unwrap();
 
     for row in stmt.execute(()).unwrap() {
@@ -225,15 +225,15 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, set_id FROM ({} LIMIT {} OFFSET {}) AS TY",
         sql, ROWSPERSITE, q.col_offset
     );
-//     println!("SQL: {}", sql);
+    //     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
     let tmp = stmt.execute(()).unwrap();
 
     for row in tmp {
-        let (organism, model, inreac, exreac, mby, mpy, scen, set_id) =
-            my::from_row::<(String, String, String, String, f64, f64, u32, u32)>(row.unwrap());
+        let (organismid, modelid, inreacid, exreacid, mby, mpy, scen, set_id) =
+            my::from_row::<(u32, u32, u32, u32, f64, f64, u32, u32)>(row.unwrap());
         sql = format!("SELECT r FROM interventionsets WHERE set_id='{}'", set_id);
-//         println!("SQL: {}", sql);
+        //         println!("SQL: {}", sql);
         let mut stmt = conn.prepare(&sql).unwrap();
         let tmp2 = stmt.execute(()).unwrap();
         let mut mis = vec![];
@@ -242,11 +242,35 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
             let ko = &mapping[r];
             mis.push(ko.clone());
         }
+        let sql1 = format!("SELECT name from organisms WHERE id='{}'", organismid);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut organism = None;
+        for row in stmt.execute(()).unwrap() {
+            organism = Some(my::from_row::<String>(row.unwrap()));
+        }
+        let sql1 = format!("SELECT name from models WHERE id='{}'", modelid);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut model = None;
+        for row in stmt.execute(()).unwrap() {
+            model = Some(my::from_row::<String>(row.unwrap()));
+        }
+        let sql1 = format!("SELECT name from inreacs WHERE id='{}'", inreacid);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut inreac = None;
+        for row in stmt.execute(()).unwrap() {
+            inreac = Some(my::from_row::<String>(row.unwrap()));
+        }
+        let sql1 = format!("SELECT name from exreacs WHERE id='{}'", exreacid);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut exreac = None;
+        for row in stmt.execute(()).unwrap() {
+            exreac = Some(my::from_row::<String>(row.unwrap()));
+        }
         let response = ResponseRoW {
-            organism: organism,
-            model: model,
-            inreac: inreac,
-            exreac: exreac,
+            organism: organism.unwrap(),
+            model: model.unwrap(),
+            inreac: inreac.unwrap(),
+            exreac: exreac.unwrap(),
             mby: mby,
             mpy: mpy,
             scen: scen,
@@ -281,16 +305,16 @@ fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<S
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, set_id FROM ({} LIMIT {} ) AS TY",
         sql, ROWSPERFILE
     );
-//     println!("SQL: {}", sql);
+    //     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
 
     let tmp = stmt.execute(()).unwrap();
 
     for row in tmp {
-        let (organism, model, inreac, exreac, mby, mpy, scen, set_id) =
-            my::from_row::<(String, String, String, String, f64, f64, u32, u32)>(row.unwrap());
+        let (organismid, modelid, inreacid, exreacid, mby, mpy, scen, set_id) =
+            my::from_row::<(u32, u32, u32, u32, f64, f64, u32, u32)>(row.unwrap());
         sql = format!("SELECT r FROM interventionsets WHERE set_id='{}'", set_id);
-//         println!("SQL: {}", sql);
+        //         println!("SQL: {}", sql);
         let mut stmt = conn.prepare(&sql).unwrap();
         let tmp2 = stmt.execute(()).unwrap();
         let mut mis = "".to_string();
@@ -299,10 +323,40 @@ fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<S
             let ko = &mapping[r];
             mis.push_str(&format!("{} ", ko.name));
         }
-
+        let sql1 = format!("SELECT name from organisms WHERE id='{}'", organismid);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut organism = None;
+        for row in stmt.execute(()).unwrap() {
+            organism = Some(my::from_row::<String>(row.unwrap()));
+        }
+        let sql1 = format!("SELECT name from models WHERE id='{}'", modelid);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut model = None;
+        for row in stmt.execute(()).unwrap() {
+            model = Some(my::from_row::<String>(row.unwrap()));
+        }
+        let sql1 = format!("SELECT name from inreacs WHERE id='{}'", inreacid);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut inreac = None;
+        for row in stmt.execute(()).unwrap() {
+            inreac = Some(my::from_row::<String>(row.unwrap()));
+        }
+        let sql1 = format!("SELECT name from exreacs WHERE id='{}'", exreacid);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut exreac = None;
+        for row in stmt.execute(()).unwrap() {
+            exreac = Some(my::from_row::<String>(row.unwrap()));
+        }
         stream.push_str(&format!(
             "{},{},{},{},{},{},{},{}\n",
-            organism, model, inreac, exreac, mby, mpy, scen, &mis
+            organism.unwrap(),
+            model.unwrap(),
+            inreac.unwrap(),
+            exreac.unwrap(),
+            mby,
+            mpy,
+            scen,
+            &mis
         ));
     }
 
@@ -310,40 +364,50 @@ fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<S
 }
 
 fn create_query(conn: &my::Pool, q: &Query) -> String {
-    let mut sql = "SELECT mis_short.organism, mis_short.model, mis_short.inreac, mis_short.exreac, mis_short.mby, mis_short.mpy, mis_short.scen, mis_short.set_id FROM mis_short WHERE 1".to_string();
+    let mut sql = "SELECT mis.organism, mis.model, mis.inreac, mis.exreac, mis.mby, mis.mpy, mis.scen, mis.set_id FROM mis WHERE 1".to_string();
     if q.organism != "None" {
-        sql.push_str(" AND organism='");
-        sql.push_str(&q.organism);
-        sql.push('\'');
+        let sql1 = format!("SELECT id from organisms WHERE name='{}'", &q.organism);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut organism = None;
+        for row in stmt.execute(()).unwrap() {
+            organism = Some(my::from_row::<u32>(row.unwrap()));
+        }
+        sql.push_str(&format!(" AND organism='{}'", organism.unwrap()));
     }
     if q.model != "None" {
-        sql.push_str(" AND model='");
-        sql.push_str(&q.model);
-        sql.push('\'');
+        let sql1 = format!("SELECT id from models WHERE name='{}'", &q.model);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut model = None;
+        for row in stmt.execute(()).unwrap() {
+            model = Some(my::from_row::<u32>(row.unwrap()));
+        }
+        sql.push_str(&format!(" AND model='{}'", model.unwrap()));
     }
     if q.inreac != "None" {
-        sql.push_str(" AND inreac='");
-        sql.push_str(&q.inreac);
-        sql.push('\'');
+        let sql1 = format!("SELECT id from inreacs WHERE name='{}'", &q.inreac);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut inreac = None;
+        for row in stmt.execute(()).unwrap() {
+            inreac = Some(my::from_row::<u32>(row.unwrap()));
+        }
+        sql.push_str(&format!(" AND inreac='{}'", inreac.unwrap()));
     }
     if q.exreac != "None" {
-        sql.push_str(" AND exreac='");
-        sql.push_str(&q.exreac);
-        sql.push('\'');
+        let sql1 = format!("SELECT id from exreacs WHERE name='{}'", &q.exreac);
+        let mut stmt = conn.prepare(&sql1).unwrap();
+        let mut exreac = None;
+        for row in stmt.execute(()).unwrap() {
+            exreac = Some(my::from_row::<u32>(row.unwrap()));
+        }
+        sql.push_str(&format!(" AND exreac='{}'", exreac.unwrap()));
     }
     if !q.mby.is_nan() {
-        sql.push_str(" AND mby='");
-        sql.push_str(&format!("{}", q.mby));
-        sql.push('\'');
+        sql.push_str(&format!(" AND mby='{}'", q.mby));
     }
-    if !q.mpy.is_nan() {
-        sql.push_str(" AND mpy='");
-        sql.push_str(&format!("{}", q.mpy));
-        sql.push('\'');
+    if q.proj != 0 {
+        sql.push_str(&format!(" AND proj='{}'", q.proj));
     }
-    sql.push_str(" AND scen='");
-    sql.push_str(&format!("{}", q.scen));
-    sql.push('\'');
+    sql.push_str(&format!(" AND scen='{}'", q.scen));
 
     let mut outer_sql = sql;
 
@@ -438,7 +502,7 @@ fn info(conn: &my::Pool) -> MecisInfo {
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let mut stmt = conn.prepare("SELECT DISTINCT mby FROM mis_short").unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT mby FROM mis").unwrap();
     let mut v_mbys: Vec<f64> = stmt
         .execute(())
         .unwrap()
@@ -446,15 +510,15 @@ fn info(conn: &my::Pool) -> MecisInfo {
         .collect();
     v_mbys.sort_by(|a, b| mcmp(a, b));
 
-    let mut stmt = conn.prepare("SELECT DISTINCT mpy FROM mis_short").unwrap();
-    let mut v_mpys: Vec<f64> = stmt
-        .execute(())
-        .unwrap()
-        .map(|row| my::from_row::<f64>(row.unwrap()))
-        .collect();
-    v_mpys.sort_by(|a, b| mcmp(a, b));
+    //     let mut stmt = conn.prepare("SELECT DISTINCT mpy FROM mis").unwrap();
+    //     let mut v_mpys: Vec<f64> = stmt
+    //         .execute(())
+    //         .unwrap()
+    //         .map(|row| my::from_row::<f64>(row.unwrap()))
+    //         .collect();
+    //     v_mpys.sort_by(|a, b| mcmp(a, b));
 
-    let mut stmt = conn.prepare("SELECT DISTINCT scen FROM mis_short").unwrap();
+    let mut stmt = conn.prepare("SELECT DISTINCT scen FROM mis").unwrap();
     let v_scens = stmt
         .execute(())
         .unwrap()
@@ -474,7 +538,7 @@ fn info(conn: &my::Pool) -> MecisInfo {
         inreacs: v_inreacs,
         exreacs: v_exreacs,
         mbys: v_mbys,
-        mpys: v_mpys,
+        //         mpys: v_mpys,
         scens: v_scens,
         reactions: v_reactions,
     };
