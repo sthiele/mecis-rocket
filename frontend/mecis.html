@@ -17174,10 +17174,10 @@ var _sthiele$mecis_rocket$Main$getDlLink = function (model) {
 												model.cmby,
 												A2(
 													_elm_lang$core$Basics_ops['++'],
-													'&mpy=',
+													'&proj=',
 													A2(
 														_elm_lang$core$Basics_ops['++'],
-														model.cmpy,
+														model.cproj,
 														A2(
 															_elm_lang$core$Basics_ops['++'],
 															'&scen=',
@@ -17342,7 +17342,6 @@ var _sthiele$mecis_rocket$Main$model = {
 		inreacs: {ctor: '[]'},
 		exreacs: {ctor: '[]'},
 		mbys: {ctor: '[]'},
-		mpys: {ctor: '[]'},
 		scens: {ctor: '[]'},
 		reactions: {ctor: '[]'}
 	},
@@ -17353,7 +17352,7 @@ var _sthiele$mecis_rocket$Main$model = {
 	cinreac: 'None',
 	cexreac: 'None',
 	cmby: 'NaN',
-	cmpy: 'NaN',
+	cproj: '0',
 	cscen: '1',
 	cmustin: '',
 	cmustins: {ctor: '[]'},
@@ -17364,9 +17363,9 @@ var _sthiele$mecis_rocket$Main$model = {
 	max_mis: 0,
 	rows: {ctor: '[]'}
 };
-var _sthiele$mecis_rocket$Main$MecisInfo = F8(
-	function (a, b, c, d, e, f, g, h) {
-		return {organisms: a, models: b, inreacs: c, exreacs: d, mbys: e, mpys: f, scens: g, reactions: h};
+var _sthiele$mecis_rocket$Main$MecisInfo = F7(
+	function (a, b, c, d, e, f, g) {
+		return {organisms: a, models: b, inreacs: c, exreacs: d, mbys: e, scens: f, reactions: g};
 	});
 var _sthiele$mecis_rocket$Main$decodeMecisInfo = A3(
 	_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
@@ -17378,29 +17377,25 @@ var _sthiele$mecis_rocket$Main$decodeMecisInfo = A3(
 		_elm_lang$core$Json_Decode$list(_elm_lang$core$Json_Decode$int),
 		A3(
 			_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
-			'mpys',
+			'mbys',
 			_elm_lang$core$Json_Decode$list(_elm_lang$core$Json_Decode$float),
 			A3(
 				_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
-				'mbys',
-				_elm_lang$core$Json_Decode$list(_elm_lang$core$Json_Decode$float),
+				'exreacs',
+				_sthiele$mecis_rocket$Main$decode_string_list,
 				A3(
 					_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
-					'exreacs',
+					'inreacs',
 					_sthiele$mecis_rocket$Main$decode_string_list,
 					A3(
 						_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
-						'inreacs',
+						'models',
 						_sthiele$mecis_rocket$Main$decode_string_list,
 						A3(
 							_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
-							'models',
+							'organisms',
 							_sthiele$mecis_rocket$Main$decode_string_list,
-							A3(
-								_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$required,
-								'organisms',
-								_sthiele$mecis_rocket$Main$decode_string_list,
-								_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$decode(_sthiele$mecis_rocket$Main$MecisInfo)))))))));
+							_NoRedInk$elm_decode_pipeline$Json_Decode_Pipeline$decode(_sthiele$mecis_rocket$Main$MecisInfo))))))));
 var _sthiele$mecis_rocket$Main$ResponseRow = F8(
 	function (a, b, c, d, e, f, g, h) {
 		return {organism: a, model: b, inreac: c, exreac: d, mby: e, mpy: f, scen: g, mis: h};
@@ -17472,7 +17467,7 @@ var _sthiele$mecis_rocket$Main$Model = function (a) {
 																return function (q) {
 																	return function (r) {
 																		return function (s) {
-																			return {ctab: a, context: b, mdl: c, cmessage: d, corganism: e, cmodel: f, cinreac: g, cexreac: h, cmby: i, cmpy: j, cscen: k, cmustin: l, cmustins: m, cforbidden: n, cforbiddens: o, morepressed: p, col_offset: q, max_mis: r, rows: s};
+																			return {ctab: a, context: b, mdl: c, cmessage: d, corganism: e, cmodel: f, cinreac: g, cexreac: h, cmby: i, cproj: j, cscen: k, cmustin: l, cmustins: m, cforbidden: n, cforbiddens: o, morepressed: p, col_offset: q, max_mis: r, rows: s};
 																		};
 																	};
 																};
@@ -17551,10 +17546,10 @@ var _sthiele$mecis_rocket$Main$getMoreData = function (model) {
 												model.cmby,
 												A2(
 													_elm_lang$core$Basics_ops['++'],
-													'&mpy=',
+													'&proj=',
 													A2(
 														_elm_lang$core$Basics_ops['++'],
-														model.cmpy,
+														model.cproj,
 														A2(
 															_elm_lang$core$Basics_ops['++'],
 															'&scen=',
@@ -17621,10 +17616,10 @@ var _sthiele$mecis_rocket$Main$getData = function (model) {
 												model.cmby,
 												A2(
 													_elm_lang$core$Basics_ops['++'],
-													'&mpy=',
+													'&proj=',
 													A2(
 														_elm_lang$core$Basics_ops['++'],
-														model.cmpy,
+														model.cproj,
 														A2(
 															_elm_lang$core$Basics_ops['++'],
 															'&scen=',
@@ -17752,12 +17747,12 @@ var _sthiele$mecis_rocket$Main$update = F2(
 						{cmby: _p8._0}),
 					_1: _elm_lang$core$Platform_Cmd$none
 				};
-			case 'ChangeMpy':
+			case 'ChangeProj':
 				return {
 					ctor: '_Tuple2',
 					_0: _elm_lang$core$Native_Utils.update(
 						model,
-						{cmpy: _p8._0}),
+						{cproj: _p8._0}),
 					_1: _elm_lang$core$Platform_Cmd$none
 				};
 			case 'ChangeScen':
@@ -18342,8 +18337,8 @@ var _sthiele$mecis_rocket$Main$mustinform = function (model) {
 var _sthiele$mecis_rocket$Main$ChangeScen = function (a) {
 	return {ctor: 'ChangeScen', _0: a};
 };
-var _sthiele$mecis_rocket$Main$ChangeMpy = function (a) {
-	return {ctor: 'ChangeMpy', _0: a};
+var _sthiele$mecis_rocket$Main$ChangeProj = function (a) {
+	return {ctor: 'ChangeProj', _0: a};
 };
 var _sthiele$mecis_rocket$Main$ChangeMby = function (a) {
 	return {ctor: 'ChangeMby', _0: a};
@@ -18698,10 +18693,10 @@ var _sthiele$mecis_rocket$Main$myform = function (m) {
 												_elm_lang$html$Html$select,
 												{
 													ctor: '::',
-													_0: _elm_lang$html$Html_Events$onInput(_sthiele$mecis_rocket$Main$ChangeMpy),
+													_0: _elm_lang$html$Html_Events$onInput(_sthiele$mecis_rocket$Main$ChangeProj),
 													_1: {
 														ctor: '::',
-														_0: _elm_lang$html$Html_Attributes$value(m.cmpy),
+														_0: _elm_lang$html$Html_Attributes$value(m.cproj),
 														_1: {ctor: '[]'}
 													}
 												},
@@ -18721,19 +18716,19 @@ var _sthiele$mecis_rocket$Main$myform = function (m) {
 														}),
 													_1: A2(
 														_elm_lang$core$List$map,
-														function ($float) {
+														function ($int) {
 															return A2(
 																_elm_lang$html$Html$option,
 																{
 																	ctor: '::',
 																	_0: _elm_lang$html$Html_Attributes$value(
-																		_elm_lang$core$Basics$toString($float)),
+																		_elm_lang$core$Basics$toString($int)),
 																	_1: {ctor: '[]'}
 																},
 																{
 																	ctor: '::',
 																	_0: _elm_lang$html$Html$text(
-																		_elm_lang$core$Basics$toString($float)),
+																		_elm_lang$core$Basics$toString($int)),
 																	_1: {ctor: '[]'}
 																});
 														},
