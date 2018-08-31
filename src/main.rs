@@ -130,7 +130,7 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
 }
 
 fn name2id(conn: &my::Pool, name: &str) -> Option<u32> {
-    let sql = format!("SELECT mecisid FROM reactions WHERE name='{}'", name);
+    let sql = format!("SELECT id FROM reactions WHERE name='{}'", name);
     let mut stmt = conn.prepare(sql).unwrap();
     let mut res = None;
     for row in stmt.execute(()).unwrap() {
