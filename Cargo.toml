@@ -2,6 +2,7 @@
 name = "mecis-rocket"
 version = "0.1.0"
 authors = ["Sven Thiele <sthiele78@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 rocket = "0.3.15"
