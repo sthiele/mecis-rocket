@@ -23,8 +23,7 @@ const ROWSPERFILE: u32 = 10000;
 
 pub fn establish_connection() -> my::Pool {
     dotenv().ok();
-    let pool = my::Pool::new(env::var("DATABASE_URL").expect("DATABASE_URL must be set")).unwrap();
-    pool
+    my::Pool::new(env::var("DATABASE_URL").expect("DATABASE_URL must be set")).unwrap()
 }
 
 #[get("/mecis_logo")]
@@ -61,7 +60,7 @@ fn mecis_info(state: State<MState>) -> Json<MecisInfo> {
 
 fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
     let mut mecisids = vec![];
-    let sql = format!("SELECT id FROM reactions");
+    let sql = "SELECT id FROM reactions".to_string();
     let mut stmt = conn.prepare(sql).unwrap();
     for row in stmt.execute(()).unwrap() {
         let mecisid = my::from_row::<u32>(row.unwrap());
@@ -93,7 +92,7 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
         }
         if keggid.is_some() {
             mapping.push(KnockOut {
-                name: name,
+                name,
                 link: Some(format!(
                     "https://www.genome.jp/dbget-bin/www_bget?{}",
                     keggid.unwrap()
@@ -112,7 +111,7 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
             }
             if biggid.is_some() {
                 mapping.push(KnockOut {
-                    name: name,
+                    name,
                     link: Some(format!(
                         "http://bigg.ucsd.edu/universal/reactions/{} ",
                         biggid.unwrap()
@@ -120,7 +119,7 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
                 });
             } else {
                 mapping.push(KnockOut {
-                    name: name,
+                    name,
                     link: None,
                 });
             }
@@ -140,14 +139,14 @@ fn name2id(conn: &my::Pool, name: &str) -> Option<u32> {
 }
 
 // compare f64 panic on NaN
-fn mcmp(one: &f64, other: &f64) -> Ordering {
+fn mcmp(one: f64, other: f64) -> Ordering {
     if one.is_nan() {
         panic!("Unexpected NaN");
     }
     if other.is_nan() {
         panic!("Unexpected NaN");
     }
-    one.partial_cmp(other).unwrap()
+    one.partial_cmp(&other).unwrap()
 }
 
 #[derive(FromForm, Clone)]
@@ -164,13 +163,16 @@ struct Query {
     col_offset: u32,
 }
 
-fn countcis(conn: &my::Pool, q: Query) -> u32 {
+fn countcis(conn: &my::Pool, q: &Query) -> u32 {
     let mut sql = create_query(&conn, &q);
     sql = format!("SELECT  COUNT(*) FROM ({}) AS TY", sql);
     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(sql).unwrap();
 
-    for row in stmt.execute(()).unwrap() {
+//     for row in stmt.execute(()).unwrap() {
+//         return my::from_row(row.unwrap());
+//     }
+    if let Some(row) = stmt.execute(()).unwrap().next() {
         return my::from_row(row.unwrap());
     }
     return 0;
@@ -207,12 +209,12 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
     let mapping = &st.mapping;
     let max_mis;
     if q.col_offset == 0 {
-        max_mis = countcis(&conn, q.clone());
+        max_mis = countcis(&conn, &q);
         if max_mis == 0 {
             let view = QueryResponse {
                 col_offset: 0,
                 max_mis: 0,
-                rows: rows,
+                rows,
             };
             return Json(view);
         }
@@ -271,19 +273,19 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
             model: model.unwrap(),
             inreac: inreac.unwrap(),
             exreac: exreac.unwrap(),
-            mby: mby,
-            mpy: mpy,
-            scen: scen,
-            mis: mis,
+            mby,
+            mpy,
+            scen,
+            mis,
         };
-        col_counter = col_counter + 1;
+        col_counter +=  1;
         rows.push(response.clone());
     }
 
     let view = QueryResponse {
         col_offset: q.col_offset + col_counter,
-        max_mis: max_mis,
-        rows: rows,
+        max_mis,
+        rows,
     };
 
     //     println!("view: {:?}",view);
@@ -294,7 +296,7 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
 fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<String>> {
     let mut stream = "".to_string();
     let mapping = &st.mapping;
-    let max_mis = countcis(&conn, q.clone());
+    let max_mis = countcis(&conn, &q);
 
     if max_mis == 0 {
         return Stream::from(Cursor::new(stream));
@@ -411,28 +413,28 @@ fn create_query(conn: &my::Pool, q: &Query) -> String {
 
     let mut outer_sql = sql;
 
-    let mut mustin = q.mustin.split_whitespace();
-    let mut forbidden = q.forbidden.split_whitespace();
+    let mustin = q.mustin.split_whitespace();
+    let forbidden = q.forbidden.split_whitespace();
     let mut counter = 1;
 
-    while let Some(r) = mustin.next() {
+     for r in mustin {
         if let Some(mecisid) = name2id(conn, r) {
             let r_sql = format!("SELECT set_id FROM interventionsets WHERE r ='{}'", mecisid);
             outer_sql = format!(
             "SELECT T{c1}.organism, T{c1}.model, T{c1}.inreac, T{c1}.exreac, T{c1}.mby, T{c1}.mpy, T{c1}.scen, T{c1}.set_id FROM ({left}) as T{c1} JOIN ({right}) as T{c2} on T{c1}.set_id=T{c2}.set_id", left=outer_sql, right=r_sql, c1=counter,c2=counter+1);
 
-            counter = counter + 2;
+            counter += 2;
         } else {
             outer_sql = format!("{} AND 1=0", outer_sql);
         }
     }
 
-    while let Some(r) = forbidden.next() {
+    for r in forbidden {
         if let Some(mecisid) = name2id(conn, r) {
             let r_sql = format!("SELECT set_id FROM interventionsets WHERE r ='{}'", mecisid);
             outer_sql = format!(
             "SELECT T{c1}.organism, T{c1}.model, T{c1}.inreac, T{c1}.exreac, T{c1}.mby, T{c1}.mpy, T{c1}.scen, T{c1}.set_id FROM ({left}) as T{c1} LEFT JOIN ({right}) as T{c2} on T{c1}.set_id=T{c2}.set_id WHERE T{c2}.set_id IS NULL",left=outer_sql, right=r_sql, c1=counter,c2=counter+1);
-            counter = counter + 2;
+            counter += 2;
         }
     }
 
@@ -457,8 +459,8 @@ fn rocket() -> rocket::Rocket {
     rocket::ignite()
         .manage(pool)
         .manage(MState {
-            info: info,
-            mapping: mapping,
+            info,
+            mapping,
         })
         .mount("/", routes![mecis])
         .mount("/", routes![mecis_info])
@@ -508,15 +510,7 @@ fn info(conn: &my::Pool) -> MecisInfo {
         .unwrap()
         .map(|row| my::from_row::<f64>(row.unwrap()))
         .collect();
-    v_mbys.sort_by(|a, b| mcmp(a, b));
-
-    //     let mut stmt = conn.prepare("SELECT DISTINCT mpy FROM mis").unwrap();
-    //     let mut v_mpys: Vec<f64> = stmt
-    //         .execute(())
-    //         .unwrap()
-    //         .map(|row| my::from_row::<f64>(row.unwrap()))
-    //         .collect();
-    //     v_mpys.sort_by(|a, b| mcmp(a, b));
+    v_mbys.sort_by(|a, b| mcmp(*a, *b));
 
     let mut stmt = conn.prepare("SELECT DISTINCT scen FROM mis").unwrap();
     let v_scens = stmt
@@ -532,15 +526,13 @@ fn info(conn: &my::Pool) -> MecisInfo {
         .map(|row| my::from_row::<String>(row.unwrap()))
         .collect();
 
-    let context = MecisInfo {
+    MecisInfo {
         organisms: v_orgs,
         models: v_models,
         inreacs: v_inreacs,
         exreacs: v_exreacs,
         mbys: v_mbys,
-        //         mpys: v_mpys,
         scens: v_scens,
         reactions: v_reactions,
-    };
-    context
+    }
 }
