@@ -1,19 +1,14 @@
-#![feature(plugin, custom_derive)]
-#![plugin(rocket_codegen)]
-
-extern crate dotenv;
-extern crate mysql;
-extern crate rocket;
+#![feature(proc_macro_hygiene, decl_macro)]
+use rocket::{catch, catchers, get, routes};
 extern crate rocket_contrib;
-#[macro_use]
-extern crate serde_derive;
 
 use dotenv::dotenv;
 use mysql as my;
 use rocket::response::NamedFile;
 use rocket::response::Stream;
 use rocket::State;
-use rocket_contrib::Json;
+use rocket_contrib::json::Json;
+use serde_derive::Serialize;
 use std::cmp::Ordering;
 use std::env;
 use std::io::Cursor;
@@ -118,10 +113,7 @@ fn create_reaction_mapping(conn: &my::Pool) -> Vec<KnockOut> {
                     )),
                 });
             } else {
-                mapping.push(KnockOut {
-                    name,
-                    link: None,
-                });
+                mapping.push(KnockOut { name, link: None });
             }
         }
     }
@@ -149,7 +141,7 @@ fn mcmp(one: f64, other: f64) -> Ordering {
     one.partial_cmp(&other).unwrap()
 }
 
-#[derive(FromForm, Clone)]
+#[derive(Clone)]
 struct Query {
     organism: String,
     model: String,
@@ -160,18 +152,13 @@ struct Query {
     scen: u32,
     mustin: String,
     forbidden: String,
-    col_offset: u32,
 }
 
-fn countcis(conn: &my::Pool, q: &Query) -> u32 {
-    let mut sql = create_query(&conn, &q);
-    sql = format!("SELECT  COUNT(*) FROM ({}) AS TY", sql);
+fn countcis(conn: &my::Pool, sql: &str) -> u32 {
+    let sql = format!("SELECT  COUNT(*) FROM ({}) AS TY", sql);
     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(sql).unwrap();
 
-//     for row in stmt.execute(()).unwrap() {
-//         return my::from_row(row.unwrap());
-//     }
     if let Some(row) = stmt.execute(()).unwrap().next() {
         return my::from_row(row.unwrap());
     }
@@ -202,14 +189,40 @@ struct QueryResponse {
     rows: Vec<ResponseRoW>,
 }
 
-#[get("/getcis?<q>")]
-fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryResponse> {
+#[get("/getcis?<organism>&<model>&<inreac>&<exreac>&<mby>&<proj>&<scen>&<mustin>&<forbidden>&<col_offset>")]
+fn getcis(
+    conn: State<my::Pool>,
+    st: State<MState>,
+    organism: String,
+    model: String,
+    inreac: String,
+    exreac: String,
+    mby: f64,
+    proj: u32,
+    scen: u32,
+    mustin: String,
+    forbidden: String,
+    col_offset: u32,
+) -> Json<QueryResponse> {
+    let q = Query {
+        organism: organism,
+        model: model,
+        inreac: inreac,
+        exreac: exreac,
+        mby: mby,
+        proj: proj,
+        scen: scen,
+        mustin: mustin,
+        forbidden: forbidden,
+    };
     let mut rows = vec![];
     let mut col_counter = 0;
     let mapping = &st.mapping;
+    
+    let mut sql = create_query(&conn, &q);
     let max_mis;
-    if q.col_offset == 0 {
-        max_mis = countcis(&conn, &q);
+    if col_offset == 0 {
+        max_mis = countcis(&conn, &sql);
         if max_mis == 0 {
             let view = QueryResponse {
                 col_offset: 0,
@@ -222,10 +235,9 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
         max_mis = 0;
     }
 
-    let mut sql = create_query(&conn, &q);
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, set_id FROM ({} LIMIT {} OFFSET {}) AS TY",
-        sql, ROWSPERSITE, q.col_offset
+        sql, ROWSPERSITE, col_offset
     );
     //     println!("SQL: {}", sql);
     let mut stmt = conn.prepare(&sql).unwrap();
@@ -278,12 +290,12 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
             scen,
             mis,
         };
-        col_counter +=  1;
+        col_counter += 1;
         rows.push(response.clone());
     }
 
     let view = QueryResponse {
-        col_offset: q.col_offset + col_counter,
+        col_offset: col_offset + col_counter,
         max_mis,
         rows,
     };
@@ -292,17 +304,42 @@ fn getcis(conn: State<my::Pool>, st: State<MState>, q: Query) -> Json<QueryRespo
     Json(view)
 }
 
-#[get("/getcsv?<q>")]
-fn getcsv(conn: State<my::Pool>, st: State<MState>, q: Query) -> Stream<Cursor<String>> {
+#[get("/getcsv?<organism>&<model>&<inreac>&<exreac>&<mby>&<proj>&<scen>&<mustin>&<forbidden>&<col_offset>")]
+fn getcsv(
+    conn: State<my::Pool>,
+    st: State<MState>,
+    organism: String,
+    model: String,
+    inreac: String,
+    exreac: String,
+    mby: f64,
+    proj: u32,
+    scen: u32,
+    mustin: String,
+    forbidden: String,
+    col_offset: u32,
+) -> Stream<Cursor<String>> {
+    let q = Query {
+        organism: organism,
+        model: model,
+        inreac: inreac,
+        exreac: exreac,
+        mby: mby,
+        proj: proj,
+        scen: scen,
+        mustin: mustin,
+        forbidden: forbidden,
+    };
     let mut stream = "".to_string();
     let mapping = &st.mapping;
-    let max_mis = countcis(&conn, &q);
+    
+    let mut sql = create_query(&conn, &q);
+    let max_mis = countcis(&conn, &sql);
 
     if max_mis == 0 {
         return Stream::from(Cursor::new(stream));
     }
 
-    let mut sql = create_query(&conn, &q);
     sql = format!(
         "SELECT organism, model, inreac, exreac, mby, mpy, scen, set_id FROM ({} LIMIT {} ) AS TY",
         sql, ROWSPERFILE
@@ -417,7 +454,7 @@ fn create_query(conn: &my::Pool, q: &Query) -> String {
     let forbidden = q.forbidden.split_whitespace();
     let mut counter = 1;
 
-     for r in mustin {
+    for r in mustin {
         if let Some(mecisid) = name2id(conn, r) {
             let r_sql = format!("SELECT set_id FROM interventionsets WHERE r ='{}'", mecisid);
             outer_sql = format!(
@@ -458,17 +495,14 @@ fn rocket() -> rocket::Rocket {
 
     rocket::ignite()
         .manage(pool)
-        .manage(MState {
-            info,
-            mapping,
-        })
+        .manage(MState { info, mapping })
         .mount("/", routes![mecis])
         .mount("/", routes![mecis_info])
         .mount("/", routes![getcis])
         .mount("/", routes![getcsv])
         .mount("/", routes![mecis_logo])
         .mount("/", routes![favicon])
-        .catch(catchers![not_found])
+        .register(catchers![not_found])
 }
 
 fn main() {
