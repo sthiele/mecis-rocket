@@ -1,12 +1,9 @@
 #![feature(proc_macro_hygiene, decl_macro)]
-use rocket::{catch, catchers, get, routes};
-extern crate rocket_contrib;
-
 use dotenv::dotenv;
 use mysql as my;
-use rocket::response::NamedFile;
-use rocket::response::Stream;
+use rocket::response::{NamedFile, Stream};
 use rocket::State;
+use rocket::{catch, catchers, get, routes};
 use rocket_contrib::json::Json;
 use serde_derive::Serialize;
 use std::cmp::Ordering;
@@ -218,7 +215,7 @@ fn getcis(
     let mut rows = vec![];
     let mut col_counter = 0;
     let mapping = &st.mapping;
-    
+
     let mut sql = create_query(&conn, &q);
     let max_mis;
     if col_offset == 0 {
@@ -332,7 +329,7 @@ fn getcsv(
     };
     let mut stream = "".to_string();
     let mapping = &st.mapping;
-    
+
     let mut sql = create_query(&conn, &q);
     let max_mis = countcis(&conn, &sql);
 
